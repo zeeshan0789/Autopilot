@@ -1,0 +1,13 @@
+# Har provider ki ek entry. Naya provider jodna ho to yahan likho.
+# Free-tier limits badalti rehti hain, isliye gateway kuch bhi hardcode nahi karta.
+
+providers:
+  - name: mock
+    type: mock
+    models: ["mock"]
+
+  - name: ollama-local
+    type: ollama
+    base_url: http://localhost:11434
+    models: ["qwen2.5:0.5b"]
+    timeout: 120
