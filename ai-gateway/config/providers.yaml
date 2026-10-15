@@ -3,6 +3,18 @@ providers:
     type: mock
     models: ["mock"]
 
+  # Test ke liye: hamesha fail hone wala provider
+  - name: mock-down
+    type: mock
+    mode: error
+    models: ["mock-down", "mock-dead"]
+
+  # Test ke liye: hamesha 429 dene wala provider
+  - name: mock-429
+    type: mock
+    mode: rate_limit
+    models: ["mock-429"]
+
   - name: ollama-local
     type: ollama
     base_url: http://localhost:11434
@@ -15,3 +27,10 @@ providers:
     api_key_env: GROQ_API_KEY
     models: ["openai/gpt-oss-20b", "openai/gpt-oss-120b"]
     timeout: 30
+
+# model fail ho to is order mein agle models try honge
+fallbacks:
+  "openai/gpt-oss-120b": ["openai/gpt-oss-20b", "qwen2.5:0.5b"]
+  "openai/gpt-oss-20b": ["qwen2.5:0.5b"]
+  "mock-down": ["mock"]
+  "mock-429": ["mock"]

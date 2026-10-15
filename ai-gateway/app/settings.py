@@ -9,9 +9,18 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # .env se keys environment mein load ho jati hain
 load_dotenv(BASE_DIR / ".env")
 
+DEFAULT_CONFIG_PATH = BASE_DIR / "config" / "providers.yaml"
+
+
+def _load_yaml(path: Path | None = None) -> dict:
+    path = path or DEFAULT_CONFIG_PATH
+    with open(path, encoding="utf-8") as f:
+        return yaml.safe_load(f)
+
 
 def load_providers_config(path: Path | None = None) -> list[dict]:
-    path = path or BASE_DIR / "config" / "providers.yaml"
-    with open(path, encoding="utf-8") as f:
-        data = yaml.safe_load(f)
-    return data["providers"]
+    return _load_yaml(path)["providers"]
+
+
+def load_fallbacks_config(path: Path | None = None) -> dict[str, list[str]]:
+    return _load_yaml(path).get("fallbacks") or {}
