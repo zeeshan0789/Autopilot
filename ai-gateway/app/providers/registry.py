@@ -2,6 +2,7 @@ from app.providers.base import BaseProvider
 from app.providers.mock import MockProvider
 from app.providers.ollama import OllamaProvider
 from app.settings import load_providers_config
+from app.providers.openai_compat import OpenAICompatProvider
 
 
 def build_provider(cfg: dict) -> BaseProvider:
@@ -15,6 +16,14 @@ def build_provider(cfg: dict) -> BaseProvider:
             name=cfg["name"],
             base_url=cfg["base_url"],
             timeout=cfg.get("timeout", 120),
+        )
+
+    if provider_type == "openai_compat":
+        return OpenAICompatProvider(
+            name=cfg["name"],
+            base_url=cfg["base_url"],
+            api_key_env=cfg["api_key_env"],
+            timeout=cfg.get("timeout", 30),
         )
 
     raise ValueError(f"Unknown provider type: {provider_type}")
