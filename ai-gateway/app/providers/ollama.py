@@ -13,6 +13,13 @@ from app.schemas.openai import (
     Message,
     Usage,
 )
+from app.providers.base import (
+    BaseProvider,
+    ProviderError,
+    ProviderRateLimitError,
+    ProviderTimeoutError,
+    ProviderTransientError,
+)
 
 
 class OllamaProvider(BaseProvider):
@@ -47,12 +54,14 @@ class OllamaProvider(BaseProvider):
         except httpx.TimeoutException as e:
             raise ProviderTimeoutError(f"{self.name}: timeout") from e
         except httpx.RequestError as e:
-            raise ProviderError(
+            raise ProviderTransientError(
                 f"{self.name}: Ollama se connect nahi hua ({type(e).__name__})"
             ) from e
 
         if resp.status_code == 429:
             raise ProviderRateLimitError(f"{self.name}: 429")
+        if resp.status_code >= 500:
+            raise ProviderTransientError(f"{self.name}: {resp.status_code} server error")
         if resp.status_code != 200:
             raise ProviderError(f"{self.name}: {resp.status_code} {resp.text[:200]}")
 

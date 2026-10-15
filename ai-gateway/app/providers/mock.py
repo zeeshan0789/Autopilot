@@ -5,6 +5,7 @@ from app.providers.base import (
     ProviderError,
     ProviderRateLimitError,
     ProviderTimeoutError,
+    ProviderTransientError,
 )
 from app.schemas.openai import (
     ChatCompletionRequest,
@@ -21,14 +22,29 @@ def count_words(text: str) -> int:
 
 
 class MockProvider(BaseProvider):
-    def __init__(self, name: str = "mock", mode: str = "ok", delay: float = 0.0):
+    def __init__(
+        self,
+        name: str = "mock",
+        mode: str = "ok",
+        delay: float = 0.0,
+        fail_first: int = 0,
+    ):
         super().__init__(name)
-        self.mode = mode    # ok, error, rate_limit, timeout
+        self.mode = mode  # ok, error, rate_limit, timeout
         self.delay = delay  # slow response simulate karne ke liye (seconds)
+        self.fail_first = fail_first  # pehli N calls waqti error dein
+        self._calls = 0
 
     async def chat(self, request: ChatCompletionRequest) -> ChatCompletionResponse:
+        self._calls += 1
+
         if self.delay:
             await asyncio.sleep(self.delay)
+
+        if self._calls <= self.fail_first:
+            raise ProviderTransientError(
+                f"{self.name}: simulated transient error (call {self._calls})"
+            )
 
         if self.mode == "error":
             raise ProviderError(f"{self.name}: simulated error")
