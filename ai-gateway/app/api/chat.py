@@ -1,5 +1,6 @@
-from fastapi import APIRouter, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Response
 
+from app.core.auth import ApiKeyInfo, require_api_key
 from app.core.executor import AllProvidersFailedError, execute_with_fallback
 from app.providers.base import ProviderRateLimitError
 from app.providers.registry import registry
@@ -9,7 +10,11 @@ router = APIRouter()
 
 
 @router.post("/v1/chat/completions", response_model=ChatCompletionResponse)
-async def chat_completions(request: ChatCompletionRequest, response: Response):
+async def chat_completions(
+    request: ChatCompletionRequest,
+    response: Response,
+    api_key: ApiKeyInfo = Depends(require_api_key),
+):
     if request.stream:
         raise HTTPException(status_code=400, detail="stream=true abhi supported nahi")
 
