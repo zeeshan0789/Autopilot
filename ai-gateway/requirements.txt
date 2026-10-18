@@ -20,6 +20,7 @@ Pygments==2.21.0
 pytest==9.1.1
 python-dotenv==1.2.4
 PyYAML==6.0.3
+redis==8.1.0
 starlette==1.8.0
 typing-inspection==0.4.4
 typing_extensions==4.16.0

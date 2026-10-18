@@ -24,3 +24,7 @@ def load_providers_config(path: Path | None = None) -> list[dict]:
 
 def load_fallbacks_config(path: Path | None = None) -> dict[str, list[str]]:
     return _load_yaml(path).get("fallbacks") or {}
+
+import os
+
+REDIS_URL = os.environ.get("REDIS_URL", "redis://127.0.0.1:6379/0")

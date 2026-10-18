@@ -1,6 +1,18 @@
 import pytest
 
 from app.core.auth import KeyStore
+from app.core.rate_limit import RateLimitResult
+
+
+class AllowAllLimiter:
+    async def check(self, key_id: str, limit: int) -> RateLimitResult:
+        return RateLimitResult(True, limit, limit, 0)
+
+
+@pytest.fixture(autouse=True)
+def no_real_redis(monkeypatch):
+    """Purane tests ko Redis ki zarurat nahi. Rate limit ke asli tests 3.5 mein."""
+    monkeypatch.setattr("app.core.rate_limit.limiter", AllowAllLimiter())
 
 
 @pytest.fixture
