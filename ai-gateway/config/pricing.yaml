@@ -1,0 +1,50 @@
+# Estimated cost ke liye rate list. Asli kharcha $0 hai (sab free tiers/local).
+# Rates USD per 1 million tokens. Badalne hon to sirf yahan badlo, code nahi.
+#
+# DHYAN: yeh "estimated cost at published list prices" hai.
+# README/CV mein kabhi nahi likhna ke asli paise bache.
+
+meta:
+  currency: USD
+  unit: per_1M_tokens
+  checked: "2026-10-18"
+  note: >
+    Groq rates groq.com/pricing se. Third-party sites alag figures dikhati hain,
+    isliye browser mein ek baar verify karo. Local aur mock rates asli bhao nahi hain.
+
+models:
+  "openai/gpt-oss-20b":
+    input: 0.10
+    output: 0.50
+    kind: list_price
+    source: https://groq.com/pricing
+
+  "openai/gpt-oss-120b":
+    input: 0.15
+    output: 0.75
+    kind: list_price
+    source: https://groq.com/pricing
+
+  # Local model: farzi (notional) compute price, asli bazaari bhao nahi
+  "qwen2.5:0.5b":
+    input: 0.005
+    output: 0.005
+    kind: notional_local
+
+  # Test providers
+  "mock":
+    input: 0
+    output: 0
+    kind: mock
+  "mock-down":
+    input: 0
+    output: 0
+    kind: mock
+  "mock-429":
+    input: 0
+    output: 0
+    kind: mock
+  "mock-dead":
+    input: 0
+    output: 0
+    kind: mock

@@ -33,3 +33,9 @@ DATABASE_URL = os.environ.get(
     "DATABASE_URL",
     "postgresql+asyncpg://autopilot:autopilot_dev@127.0.0.1:5432/autopilot",
 )
+
+PRICING_PATH = BASE_DIR / "config" / "pricing.yaml"
+
+
+def load_pricing_config(path: Path | None = None) -> dict:
+    return _load_yaml(path or PRICING_PATH)
