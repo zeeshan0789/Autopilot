@@ -32,7 +32,7 @@ class Trace(Base):
     served_model: Mapped[str | None] = mapped_column(String(128))
     provider: Mapped[str | None] = mapped_column(String(64))
     fallback_used: Mapped[bool] = mapped_column(Boolean, default=False)
-    failed_attempts: Mapped[list | None] = mapped_column(JSONB)
+    failed_attempts: Mapped[list | None] = mapped_column(JSONB(none_as_null=True))
 
     # Nateeja
     status: Mapped[str] = mapped_column(String(16), index=True)  # success / error
