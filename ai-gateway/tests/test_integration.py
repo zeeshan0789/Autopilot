@@ -111,3 +111,10 @@ def test_rate_limiter_with_real_redis():
             await limiter.client.aclose()
 
     asyncio.run(run())
+
+def test_provider_base_urls_use_ipv4_loopback():
+    """Same Windows IPv6 issue as Redis: avoid 'localhost' in provider URLs."""
+    from app.settings import load_providers_config
+
+    for provider in load_providers_config():
+        assert "localhost" not in provider.get("base_url", ""), provider["name"]
