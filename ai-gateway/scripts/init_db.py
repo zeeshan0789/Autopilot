@@ -1,19 +1,21 @@
-import asyncio
+"""Create or upgrade the database schema by running all Alembic migrations.
 
-from sqlalchemy import text
+If your database already has the traces table from before Alembic was added (created
+by an older version of this script), run "alembic stamp 0001" once first.
+"""
 
-from app.db.models import Base
-from app.db.session import engine
+from alembic import command
+from alembic.config import Config
+
+from app.settings import BASE_DIR
 
 
-async def main():
-    async with engine.begin() as conn:
-        version = (await conn.execute(text("select version()"))).scalar()
-        print("Connected:", version)
-        await conn.run_sync(Base.metadata.create_all)
-    await engine.dispose()
-    print("Table 'traces' ready.")
+def main():
+    config = Config(str(BASE_DIR / "alembic.ini"))
+    config.set_main_option("script_location", str(BASE_DIR / "alembic"))
+    command.upgrade(config, "head")
+    print("Database schema is up to date.")
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()

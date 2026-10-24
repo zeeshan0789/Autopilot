@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import Boolean, DateTime, Integer, Numeric, String, Text, func
+from sqlalchemy import Boolean, DateTime, Float, Integer, Numeric, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -45,3 +45,13 @@ class Trace(Base):
     total_tokens: Mapped[int | None] = mapped_column(Integer)
     estimated_cost_usd: Mapped[Decimal | None] = mapped_column(Numeric(12, 8))
     latency_ms: Mapped[int | None] = mapped_column(Integer)
+
+    # Semantic cache (NULL on rows written before the cache existed)
+    # cache_status: hit, miss, blocked (guard rejected a close match), bypass (not looked up)
+    cache_status: Mapped[str | None] = mapped_column(String(16), index=True)
+    cache_reason: Mapped[str | None] = mapped_column(String(32))
+    cache_similarity: Mapped[float | None] = mapped_column(Float)
+    cache_entry_id: Mapped[str | None] = mapped_column(String(32))
+    # On a hit: what the original model call used, i.e. what the cache avoided
+    saved_tokens: Mapped[int | None] = mapped_column(Integer)
+    saved_cost_usd: Mapped[Decimal | None] = mapped_column(Numeric(12, 8))
