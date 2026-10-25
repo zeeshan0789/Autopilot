@@ -125,6 +125,27 @@ class SemanticCache:
             return None
         return CacheCandidate(partition.entries[position], float(scores[0][0]))
 
+    def lookup_many(
+        self, scope: CacheScope, embedding, k: int = 5
+    ) -> list[CacheCandidate]:
+        """The k closest live entries, best first. Applying a threshold is the caller's job."""
+        vector = self._prepare(embedding)
+        partition = self._partitions.get(scope)
+        if partition is None:
+            return []
+
+        self._drop_expired(partition)
+        if not partition.entries:
+            return []
+
+        count = min(k, len(partition.entries))
+        scores, ids = partition.index.search(vector.reshape(1, -1), count)
+        return [
+            CacheCandidate(partition.entries[int(i)], float(s))
+            for s, i in zip(scores[0], ids[0])
+            if int(i) >= 0
+        ]
+
     def size(self) -> int:
         return sum(len(p.entries) for p in self._partitions.values())
 

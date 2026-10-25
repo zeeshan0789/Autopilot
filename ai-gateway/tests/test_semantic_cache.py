@@ -183,3 +183,69 @@ def test_wrong_dimension_is_rejected():
     cache = make_cache(clock)
     with pytest.raises(ValueError):
         cache.lookup(make_scope(), [1, 0, 0])
+
+        # ---------- lookup_many (added in step P2.4b) ----------
+
+
+def test_lookup_many_returns_best_first():
+    clock = Clock()
+    cache = make_cache(clock)
+    cache.add(make_scope(), E1, make_entry(clock, "one"))
+    cache.add(make_scope(), [1, 1, 0, 0], make_entry(clock, "diagonal"))
+    cache.add(make_scope(), E2, make_entry(clock, "two"))
+
+    found = cache.lookup_many(make_scope(), [1, 0.2, 0, 0], k=3)
+    assert [c.entry.prompt_text for c in found] == ["one", "diagonal", "two"]
+    similarities = [c.similarity for c in found]
+    assert similarities == sorted(similarities, reverse=True)
+
+
+def test_lookup_many_respects_k():
+    clock = Clock()
+    cache = make_cache(clock)
+    cache.add(make_scope(), E1, make_entry(clock, "one"))
+    cache.add(make_scope(), E2, make_entry(clock, "two"))
+    cache.add(make_scope(), E3, make_entry(clock, "three"))
+
+    assert len(cache.lookup_many(make_scope(), E1, k=2)) == 2
+
+
+def test_lookup_many_with_fewer_entries_than_k():
+    clock = Clock()
+    cache = make_cache(clock)
+    cache.add(make_scope(), E1, make_entry(clock, "only"))
+
+    found = cache.lookup_many(make_scope(), E1, k=5)
+    assert [c.entry.prompt_text for c in found] == ["only"]
+
+
+def test_lookup_many_on_unknown_scope_or_empty_cache_is_empty():
+    clock = Clock()
+    cache = make_cache(clock)
+    assert cache.lookup_many(make_scope(), E1) == []
+
+    cache.add(make_scope(), E1, make_entry(clock))
+    assert cache.lookup_many(make_scope(namespace="other"), E1) == []
+
+
+def test_lookup_many_skips_expired_entries():
+    clock = Clock()
+    cache = make_cache(clock)
+    cache.add(make_scope(), E1, make_entry(clock, "old", ttl=10))
+    clock.now += 11
+    cache.add(make_scope(), E2, make_entry(clock, "new", ttl=10))
+
+    found = cache.lookup_many(make_scope(), E1, k=5)
+    assert [c.entry.prompt_text for c in found] == ["new"]
+
+
+def test_lookup_returns_the_same_first_result_as_lookup_many():
+    clock = Clock()
+    cache = make_cache(clock)
+    cache.add(make_scope(), E1, make_entry(clock, "one"))
+    cache.add(make_scope(), E2, make_entry(clock, "two"))
+
+    single = cache.lookup(make_scope(), [0.2, 1, 0, 0])
+    many = cache.lookup_many(make_scope(), [0.2, 1, 0, 0], k=2)
+    assert single.entry.prompt_text == many[0].entry.prompt_text == "two"
+    assert single.similarity == pytest.approx(many[0].similarity)

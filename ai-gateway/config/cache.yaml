@@ -1,0 +1,20 @@
+# Semantic cache settings. Change values here, not in code.
+cache:
+  enabled: true
+
+  # STARTING VALUE ONLY. How similar two prompts must be before the cache may reuse an
+  # answer (0 to 1). It is tuned on a labeled sample in step P2.6. Higher means safer
+  # and fewer hits.
+  similarity_threshold: 0.90
+
+  # How long a cached answer stays valid, in seconds (3600 is one hour)
+  ttl_seconds: 3600
+
+  # Maximum cached answers per scope (per key, model, system prompt, temperature bucket)
+  max_entries_per_scope: 1000
+
+  # Prompts longer than this skip the cache (the embedding model truncates long input)
+  max_prompt_chars: 800
+
+  # Requests with a higher temperature skip the cache (the caller wants varied answers)
+  max_temperature: 0.7

@@ -20,7 +20,12 @@ class Embedder:
 
     @property
     def dimension(self) -> int:
-        return int(self._load().get_sentence_embedding_dimension())
+        model = self._load()
+        # Newer sentence-transformers versions renamed this method
+        getter = getattr(model, "get_embedding_dimension", None) or getattr(
+            model, "get_sentence_embedding_dimension"
+        )
+        return int(getter())
 
     def encode(self, text: str) -> np.ndarray:
         vector = self._load().encode(text, normalize_embeddings=True)

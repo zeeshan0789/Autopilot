@@ -39,3 +39,9 @@ PRICING_PATH = BASE_DIR / "config" / "pricing.yaml"
 
 def load_pricing_config(path: Path | None = None) -> dict:
     return _load_yaml(path or PRICING_PATH)
+
+CACHE_CONFIG_PATH = BASE_DIR / "config" / "cache.yaml"
+
+
+def load_cache_config(path: Path | None = None) -> dict:
+    return _load_yaml(path or CACHE_CONFIG_PATH).get("cache") or {}
