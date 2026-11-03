@@ -30,6 +30,14 @@ class TraceData:
     estimated_cost_usd: Decimal | None = None
     latency_ms: int | None = None
 
+    # Semantic cache (None when the request never reached the cache step)
+    cache_status: str | None = None  # hit, miss, blocked, bypass
+    cache_reason: str | None = None
+    cache_similarity: float | None = None
+    cache_entry_id: str | None = None
+    saved_tokens: int | None = None
+    saved_cost_usd: Decimal | None = None
+
 
 async def record_trace(data: TraceData) -> None:
     """Write one trace row. Never raises: tracing must not break requests."""

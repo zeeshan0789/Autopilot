@@ -118,3 +118,65 @@ def test_provider_base_urls_use_ipv4_loopback():
 
     for provider in load_providers_config():
         assert "localhost" not in provider.get("base_url", ""), provider["name"]
+
+@pytest.mark.integration
+def test_cache_fields_roundtrip_with_real_postgres(monkeypatch):
+    async def run():
+        # Fresh engine inside this event loop (the app's global engine is bound to another one)
+        engine = create_async_engine(DATABASE_URL, connect_args={"timeout": 3})
+        Session = async_sessionmaker(engine, expire_on_commit=False)
+
+        try:
+            async with engine.connect() as conn:
+                await conn.execute(text("select 1"))
+        except Exception as e:
+            await engine.dispose()
+            pytest.skip(f"Postgres not reachable ({type(e).__name__}); run docker compose up -d")
+
+        monkeypatch.setattr("app.core.tracing.SessionLocal", Session)
+        request_id = "it-" + uuid.uuid4().hex
+
+        try:
+            await record_trace(
+                TraceData(
+                    request_id=request_id,
+                    requested_model="integration-test",
+                    served_model="mock",
+                    provider="cache",
+                    prompt_tokens=0,
+                    completion_tokens=0,
+                    total_tokens=0,
+                    estimated_cost_usd=Decimal(0),
+                    latency_ms=7,
+                    cache_status="hit",
+                    cache_reason="hit",
+                    cache_similarity=0.9731,
+                    cache_entry_id="abc123",
+                    saved_tokens=42,
+                    saved_cost_usd=Decimal("0.0000086"),
+                )
+            )
+
+            async with Session() as session:
+                row = (
+                    await session.execute(
+                        select(Trace).where(Trace.request_id == request_id)
+                    )
+                ).scalar_one()
+                assert row.cache_status == "hit"
+                assert row.cache_reason == "hit"
+                assert row.cache_similarity == pytest.approx(0.9731, abs=1e-6)
+                assert row.cache_entry_id == "abc123"
+                assert row.saved_tokens == 42
+                assert row.saved_cost_usd == Decimal("0.0000086")
+                assert row.estimated_cost_usd == 0
+        finally:
+            async with Session() as session:
+                await session.execute(
+                    text("delete from traces where request_id = :r"),
+                    {"r": request_id},
+                )
+                await session.commit()
+            await engine.dispose()
+
+    asyncio.run(run())

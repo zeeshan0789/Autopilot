@@ -7,6 +7,7 @@ from app.cache.service import (
     CacheService,
     CacheSettings,
     conversation_text,
+    looks_like_refusal,
     system_hash,
     temperature_bucket,
 )
@@ -313,6 +314,53 @@ def test_expired_entries_are_not_served():
     clock.now += 61
     assert service.lookup(make_request(), "key1").status == "miss"
 
+# ---------- Refusals are not cached ----------
+
+
+@pytest.mark.parametrize(
+    "refusal",
+    [
+        "I'm sorry, but I can't provide that.",
+        "I\u2019m sorry, but I can\u2019t help with that.",  # curly apostrophes
+        "I cannot answer that question.",
+        "**Sorry**, I don't know.",
+        '"I can\'t help with that."',
+        "Unfortunately, I don't have that information.",
+        "As an AI, I can't browse the internet.",
+        "I don't have access to that information.",
+        "\n  Sorry, no.",
+    ],
+)
+def test_refusals_are_not_stored(refusal):
+    service, _, _ = make_service()
+    _, stored = learn(service, make_request(), answer=refusal)
+    assert stored is False
+    assert service.size() == 0
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [
+        "Paris",
+        "The capital of France is **Paris**.",
+        "The answer is 42.",
+        "It can't be negative, so the answer is 5.",  # contains "can't" but does not start with it
+        pytest.param(
+            "Sorry " + "this is a long and useful answer. " * 20,
+            id="long answer that starts with Sorry is real content",
+        ),
+    ],
+)
+def test_real_answers_are_stored(answer):
+    service, _, _ = make_service()
+    _, stored = learn(service, make_request(), answer=answer)
+    assert stored is True
+    assert service.size() == 1
+
+
+def test_looks_like_refusal_ignores_text_length_only_above_the_limit():
+    assert looks_like_refusal("Sorry, no.")
+    assert not looks_like_refusal("Sorry. " + "x" * 400)
 
 # ---------- Failing open ----------
 

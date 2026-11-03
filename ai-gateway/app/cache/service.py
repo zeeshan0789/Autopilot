@@ -33,6 +33,30 @@ logger = logging.getLogger("autopilot.cache")
 # guard (the 2024 answer when asking about 2025) while the next one is fine.
 CANDIDATES_TO_CHECK = 5
 
+# A short answer that starts like this is a refusal or a "cannot help" reply. Models are
+# not deterministic, so the same question may get a real answer next time. Caching the
+# refusal would keep serving it until the entry expires.
+_REFUSAL_OPENERS = (
+    "i'm sorry", "i am sorry", "sorry", "i apologize", "apologies",
+    "i can't", "i cannot", "i can not", "i won't", "i will not",
+    "i'm unable", "i am unable", "i'm not able", "i am not able",
+    "i'm afraid", "unfortunately, i", "as an ai",
+    "i don't have", "i do not have", "i don't know", "i do not know",
+    "i'm not sure", "i am not sure",
+)
+# A long answer that merely starts with "Sorry" is real content, so only short ones count
+_MAX_REFUSAL_CHARS = 300
+
+
+def looks_like_refusal(answer: str) -> bool:
+    text = answer.strip()
+    if len(text) > _MAX_REFUSAL_CHARS:
+        return False
+    # Curly apostrophes and leading markdown or quotes must not hide the opener
+    text = text.replace("\u2019", "'").replace("\u2018", "'").lower()
+    text = text.lstrip(" \t\r\n*_\"'`>#")
+    return text.startswith(_REFUSAL_OPENERS)
+
 
 @dataclass(frozen=True)
 class CacheSettings:
@@ -216,6 +240,8 @@ class CacheService:
         answer = response.choices[0].message.content if response.choices else ""
         if not answer.strip():
             return False  # never cache an empty answer
+        if looks_like_refusal(answer):
+            return False  # never cache "I'm sorry, but I can't help with that"
 
         entry = CacheEntry(
             prompt_text=lookup.prompt_text,
