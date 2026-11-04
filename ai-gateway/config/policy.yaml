@@ -1,0 +1,72 @@
+# Routing policy. Clients send model "auto" to let the gateway choose a model.
+# Any other model name is used exactly as requested (no routing).
+#
+# These rules are heuristics, not a quality guarantee. The first rule that matches wins.
+# When no rule matches, default_tier is used. Every value here is a starting point to be
+# measured and tuned (benchmark in P2.6, evaluation in phase 4), not a tested optimum.
+policy:
+  enabled: true
+
+  # The model name that asks the gateway to choose
+  alias: "auto"
+
+  # tier name -> concrete model (must exist in providers.yaml and pricing.yaml)
+  tiers:
+    simple: "openai/gpt-oss-20b"
+    complex: "openai/gpt-oss-120b"
+
+  default_tier: simple
+
+  # Conditions inside one rule must ALL be true. Known conditions:
+  #   min_chars, max_chars     length of the conversation text (system prompt not counted)
+  #   min_messages             number of non system messages (history length)
+  #   min_questions            number of question marks
+  #   min_max_tokens           the caller asked for a long answer
+  #   any_keywords             one of these words or phrases appears (whole words only)
+  #   contains_code            a code block or obvious code syntax
+  rules:
+    - name: code
+      tier: complex
+      when:
+        contains_code: true
+
+    - name: reasoning_keywords
+      tier: complex
+      when:
+        any_keywords:
+          - "step by step"
+          - "analyze"
+          - "analyse"
+          - "compare"
+          - "contrast"
+          - "evaluate"
+          - "prove"
+          - "derive"
+          - "explain why"
+          - "tradeoffs"
+          - "pros and cons"
+          - "design a"
+          - "architecture"
+          - "refactor"
+          - "debug"
+          - "optimize"
+
+    - name: long_prompt
+      tier: complex
+      when:
+        min_chars: 600
+
+    - name: long_conversation
+      tier: complex
+      when:
+        min_messages: 7
+
+    - name: multi_part_question
+      tier: complex
+      when:
+        min_questions: 3
+
+    - name: large_output
+      tier: complex
+      when:
+        min_max_tokens: 800

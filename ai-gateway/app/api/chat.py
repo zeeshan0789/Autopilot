@@ -12,6 +12,7 @@ from app.cache.service import CacheLookup
 from app.core.auth import ApiKeyInfo
 from app.core.cost import estimate_cost
 from app.core.executor import AllProvidersFailedError, execute_with_fallback
+from app.core.policy import RouteDecision, policy_router
 from app.core.rate_limit import enforce_rate_limit
 from app.core.tracing import TraceData, schedule_trace
 from app.providers.base import ProviderRateLimitError
@@ -25,6 +26,11 @@ router = APIRouter()
 
 def elapsed_ms(started: float) -> int:
     return int((time.perf_counter() - started) * 1000)
+
+def add_route_headers(response: Response, decision: RouteDecision) -> None:
+    if decision.routed:
+        response.headers["X-Autopilot-Route"] = decision.rule
+        response.headers["X-Autopilot-Routed-Model"] = decision.model
 
 
 async def lookup_cache(request: ChatCompletionRequest, namespace: str) -> CacheLookup:
@@ -55,6 +61,14 @@ async def chat_completions(
             raise HTTPException(
                 status_code=400, detail="stream=true is not supported yet"
             )
+        # Model "auto" is routed by the policy. Any other model is used as requested.
+        decision = policy_router.decide(request)
+        trace.routed_model = decision.model
+        trace.policy_rule = decision.rule
+        if decision.routed:
+            # From here on the request carries the concrete model, so the fallback
+            # chain and the cache scope both use the model that will really answer
+            request = request.model_copy(update={"model": decision.model})
 
         chain = registry.chain_for(request.model)
         if not chain:
@@ -90,6 +104,7 @@ async def chat_completions(
             response.headers["X-Autopilot-Provider"] = "cache"
             response.headers["X-Autopilot-Model"] = entry.served_model
             response.headers["X-Autopilot-Fallback"] = "false"
+            add_route_headers(response, decision)
             return cache_service.response_from(entry)
 
         try:
@@ -146,4 +161,5 @@ async def chat_completions(
     response.headers["X-Autopilot-Provider"] = result.provider
     response.headers["X-Autopilot-Model"] = result.model
     response.headers["X-Autopilot-Fallback"] = str(result.fallback_used).lower()
+    add_route_headers(response, decision)
     return result.response

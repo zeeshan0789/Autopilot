@@ -45,3 +45,9 @@ CACHE_CONFIG_PATH = BASE_DIR / "config" / "cache.yaml"
 
 def load_cache_config(path: Path | None = None) -> dict:
     return _load_yaml(path or CACHE_CONFIG_PATH).get("cache") or {}
+
+POLICY_CONFIG_PATH = BASE_DIR / "config" / "policy.yaml"
+
+
+def load_policy_config(path: Path | None = None) -> dict:
+    return _load_yaml(path or POLICY_CONFIG_PATH).get("policy") or {}

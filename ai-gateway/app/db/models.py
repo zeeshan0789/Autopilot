@@ -55,3 +55,6 @@ class Trace(Base):
     # On a hit: what the original model call used, i.e. what the cache avoided
     saved_tokens: Mapped[int | None] = mapped_column(Integer)
     saved_cost_usd: Mapped[Decimal | None] = mapped_column(Numeric(12, 8))
+    # Routing policy
+    routed_model: Mapped[str | None] = mapped_column(String(128))
+    policy_rule: Mapped[str | None] = mapped_column(String(64))

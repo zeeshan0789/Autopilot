@@ -37,6 +37,9 @@ class TraceData:
     cache_entry_id: str | None = None
     saved_tokens: int | None = None
     saved_cost_usd: Decimal | None = None
+    # Routing policy: what the client asked for is in requested_model
+    routed_model: str | None = None  # the model the policy chose (before any fallback)
+    policy_rule: str | None = None  # rule name, "default", "explicit" or "policy_error"
 
 
 async def record_trace(data: TraceData) -> None:
