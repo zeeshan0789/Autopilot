@@ -1,0 +1,99 @@
+{"new_prompt": "Which city is the capital of France?", "cached_prompt": "What is the capital of France?", "reusable": true, "category": "paraphrase"}
+{"new_prompt": "I forgot my password, how can I change it?", "cached_prompt": "How do I reset my password?", "reusable": true, "category": "paraphrase"}
+{"new_prompt": "What is the full form of HTTP?", "cached_prompt": "What does HTTP stand for?", "reusable": true, "category": "paraphrase"}
+{"new_prompt": "How many days does a leap year have?", "cached_prompt": "How many days are in a leap year?", "reusable": true, "category": "paraphrase"}
+{"new_prompt": "What is a REST API?", "cached_prompt": "Explain what a REST API is.", "reusable": true, "category": "paraphrase"}
+{"new_prompt": "How do I turn a string into an int in Python?", "cached_prompt": "How can I convert a string to an integer in Python?", "reusable": true, "category": "paraphrase"}
+{"new_prompt": "At what temperature does water boil at sea level?", "cached_prompt": "What is the boiling point of water at sea level?", "reusable": true, "category": "paraphrase"}
+{"new_prompt": "Who is the author of Pride and Prejudice?", "cached_prompt": "Who wrote the novel Pride and Prejudice?", "reusable": true, "category": "paraphrase"}
+{"new_prompt": "How is a Python list different from a tuple?", "cached_prompt": "What is the difference between a list and a tuple in Python?", "reusable": true, "category": "paraphrase"}
+{"new_prompt": "Why does Earth have seasons?", "cached_prompt": "What causes the seasons on Earth?", "reusable": true, "category": "paraphrase"}
+{"new_prompt": "Can you explain photosynthesis?", "cached_prompt": "What is photosynthesis?", "reusable": true, "category": "paraphrase"}
+{"new_prompt": "What is the way to undo my most recent Git commit?", "cached_prompt": "How do I undo the last commit in Git?", "reusable": true, "category": "paraphrase"}
+{"new_prompt": "Calculate the square root of 144.", "cached_prompt": "What is the square root of 144?", "reusable": true, "category": "paraphrase"}
+{"new_prompt": "Which planet is the biggest in our solar system?", "cached_prompt": "What is the largest planet in the solar system?", "reusable": true, "category": "paraphrase"}
+{"new_prompt": "How many continents does Earth have?", "cached_prompt": "How many continents are there?", "reusable": true, "category": "paraphrase"}
+{"new_prompt": "What does ephemeral mean?", "cached_prompt": "What is the meaning of the word ephemeral?", "reusable": true, "category": "paraphrase"}
+{"new_prompt": "What is the way to center a div using CSS?", "cached_prompt": "How do I center a div in CSS?", "reusable": true, "category": "paraphrase"}
+{"new_prompt": "Which artist created the Mona Lisa?", "cached_prompt": "Who painted the Mona Lisa?", "reusable": true, "category": "paraphrase"}
+{"new_prompt": "What is gold's chemical symbol?", "cached_prompt": "What is the chemical symbol for gold?", "reusable": true, "category": "paraphrase"}
+{"new_prompt": "How fast does light travel?", "cached_prompt": "What is the speed of light?", "reusable": true, "category": "paraphrase"}
+{"new_prompt": "Who was the first US president?", "cached_prompt": "Who was the first president of the United States?", "reusable": true, "category": "paraphrase"}
+{"new_prompt": "Which mountain is the highest in the world?", "cached_prompt": "What is the tallest mountain in the world?", "reusable": true, "category": "paraphrase"}
+{"new_prompt": "What is the Spanish word for hello?", "cached_prompt": "How do you say hello in Spanish?", "reusable": true, "category": "paraphrase"}
+{"new_prompt": "Which city is Japan's capital?", "cached_prompt": "What is the capital of Japan?", "reusable": true, "category": "paraphrase"}
+{"new_prompt": "How can I find out which version of Python I have?", "cached_prompt": "How do I check my Python version?", "reusable": true, "category": "paraphrase"}
+{"new_prompt": "Which mammal is the biggest?", "cached_prompt": "What is the largest mammal?", "reusable": true, "category": "paraphrase"}
+{"new_prompt": "What is the recipe for pancakes?", "cached_prompt": "How do I make pancakes?", "reusable": true, "category": "paraphrase"}
+{"new_prompt": "How many players are in a soccer team?", "cached_prompt": "How many players are on a soccer team?", "reusable": true, "category": "paraphrase"}
+{"new_prompt": "What is water's chemical formula?", "cached_prompt": "What is the chemical formula of water?", "reusable": true, "category": "paraphrase"}
+{"new_prompt": "Can you explain what an API is?", "cached_prompt": "What is an API?", "reusable": true, "category": "paraphrase"}
+{"new_prompt": "what is the capital of france", "cached_prompt": "What is the capital of France?", "reusable": true, "category": "formatting"}
+{"new_prompt": "How do I reset my password", "cached_prompt": "How do I reset my password?", "reusable": true, "category": "formatting"}
+{"new_prompt": "whats the boiling point of water", "cached_prompt": "What is the boiling point of water?", "reusable": true, "category": "formatting"}
+{"new_prompt": "who wrote pride and prejudice", "cached_prompt": "Who wrote Pride and Prejudice?", "reusable": true, "category": "formatting"}
+{"new_prompt": "how many days in a leap year", "cached_prompt": "How many days are in a leap year?", "reusable": true, "category": "formatting"}
+{"new_prompt": "capital of germany", "cached_prompt": "What is the capital of Germany?", "reusable": true, "category": "formatting"}
+{"new_prompt": "Convert 200 USD to PKR", "cached_prompt": "Convert 100 USD to PKR", "reusable": false, "category": "number_changed"}
+{"new_prompt": "What is the square root of 169?", "cached_prompt": "What is the square root of 144?", "reusable": false, "category": "number_changed"}
+{"new_prompt": "How many days are in 3 weeks?", "cached_prompt": "How many days are in 2 weeks?", "reusable": false, "category": "number_changed"}
+{"new_prompt": "List 5 healthy breakfast ideas.", "cached_prompt": "List 10 healthy breakfast ideas.", "reusable": false, "category": "number_changed"}
+{"new_prompt": "What is 15% of 200?", "cached_prompt": "What is 20% of 200?", "reusable": false, "category": "number_changed"}
+{"new_prompt": "What is the area of a circle with radius 5?", "cached_prompt": "What is the area of a circle with radius 7?", "reusable": false, "category": "number_changed"}
+{"new_prompt": "Give me a 3 day itinerary for Rome.", "cached_prompt": "Give me a 7 day itinerary for Rome.", "reusable": false, "category": "number_changed"}
+{"new_prompt": "Write a 100 word summary of the French Revolution.", "cached_prompt": "Write a 50 word summary of the French Revolution.", "reusable": false, "category": "number_changed"}
+{"new_prompt": "Is 17 a prime number?", "cached_prompt": "Is 21 a prime number?", "reusable": false, "category": "number_changed"}
+{"new_prompt": "Convert 5 miles to kilometers.", "cached_prompt": "Convert 10 miles to kilometers.", "reusable": false, "category": "number_changed"}
+{"new_prompt": "Convert 60 km/h to miles per hour.", "cached_prompt": "Convert 100 km/h to miles per hour.", "reusable": false, "category": "number_changed"}
+{"new_prompt": "What was Apple revenue in 2025?", "cached_prompt": "What was Apple revenue in 2024?", "reusable": false, "category": "year_changed"}
+{"new_prompt": "Who won the World Cup in 2022?", "cached_prompt": "Who won the World Cup in 2018?", "reusable": false, "category": "year_changed"}
+{"new_prompt": "What happened in 1989?", "cached_prompt": "What happened in 1969?", "reusable": false, "category": "year_changed"}
+{"new_prompt": "What was Tesla revenue in 2022?", "cached_prompt": "What was Tesla revenue in 2023?", "reusable": false, "category": "year_changed"}
+{"new_prompt": "Which team won the NBA finals in 2019?", "cached_prompt": "Which team won the NBA finals in 2016?", "reusable": false, "category": "year_changed"}
+{"new_prompt": "Who won the Nobel Prize in Physics in 2021?", "cached_prompt": "Who won the Nobel Prize in Physics in 2020?", "reusable": false, "category": "year_changed"}
+{"new_prompt": "What was the population of India in 2020?", "cached_prompt": "What was the population of India in 2010?", "reusable": false, "category": "year_changed"}
+{"new_prompt": "List the Oscar winners of 2016.", "cached_prompt": "List the Oscar winners of 2015.", "reusable": false, "category": "year_changed"}
+{"new_prompt": "What is the capital of Germany?", "cached_prompt": "What is the capital of France?", "reusable": false, "category": "entity_changed"}
+{"new_prompt": "What is the population of Brazil?", "cached_prompt": "What is the population of Japan?", "reusable": false, "category": "entity_changed"}
+{"new_prompt": "Who founded Google?", "cached_prompt": "Who founded Microsoft?", "reusable": false, "category": "entity_changed"}
+{"new_prompt": "What is the currency of India?", "cached_prompt": "What is the currency of Pakistan?", "reusable": false, "category": "entity_changed"}
+{"new_prompt": "How tall is Mount Fuji?", "cached_prompt": "How tall is Mount Everest?", "reusable": false, "category": "entity_changed"}
+{"new_prompt": "What language do people speak in Brazil?", "cached_prompt": "What language do people speak in Japan?", "reusable": false, "category": "entity_changed"}
+{"new_prompt": "Where is the Colosseum located?", "cached_prompt": "Where is the Eiffel Tower located?", "reusable": false, "category": "entity_changed"}
+{"new_prompt": "Who directed Titanic?", "cached_prompt": "Who directed Inception?", "reusable": false, "category": "entity_changed"}
+{"new_prompt": "What is the best way to learn Java?", "cached_prompt": "What is the best way to learn Python?", "reusable": false, "category": "entity_changed"}
+{"new_prompt": "How do I install Docker on Linux?", "cached_prompt": "How do I install Docker on Windows?", "reusable": false, "category": "entity_changed"}
+{"new_prompt": "What does Tesla sell?", "cached_prompt": "What does Amazon sell?", "reusable": false, "category": "entity_changed"}
+{"new_prompt": "Write a poem about London.", "cached_prompt": "Write a poem about Paris.", "reusable": false, "category": "entity_changed"}
+{"new_prompt": "Is it not safe to eat raw eggs?", "cached_prompt": "Is it safe to eat raw eggs?", "reusable": false, "category": "negation"}
+{"new_prompt": "Why doesn't my code work?", "cached_prompt": "Why does my code work?", "reusable": false, "category": "negation"}
+{"new_prompt": "Should I not use a VPN?", "cached_prompt": "Should I use a VPN?", "reusable": false, "category": "negation"}
+{"new_prompt": "Is coffee not good for you?", "cached_prompt": "Is coffee good for you?", "reusable": false, "category": "negation"}
+{"new_prompt": "Does exercise never improve sleep?", "cached_prompt": "Does exercise improve sleep?", "reusable": false, "category": "negation"}
+{"new_prompt": "Why is the sky not blue?", "cached_prompt": "Why is the sky blue?", "reusable": false, "category": "negation"}
+{"new_prompt": "Is it illegal to record a phone call?", "cached_prompt": "Is it legal to record a phone call?", "reusable": false, "category": "negation"}
+{"new_prompt": "Is this statement false?", "cached_prompt": "Is this statement true?", "reusable": false, "category": "negation"}
+{"new_prompt": "How do I bake chocolate chip cookies?", "cached_prompt": "What is the capital of France?", "reusable": false, "category": "unrelated"}
+{"new_prompt": "What is the best way to learn guitar?", "cached_prompt": "Explain how a car engine works.", "reusable": false, "category": "unrelated"}
+{"new_prompt": "Who painted the Sistine Chapel ceiling?", "cached_prompt": "How do I fix a flat bicycle tire?", "reusable": false, "category": "unrelated"}
+{"new_prompt": "What is a black hole?", "cached_prompt": "How do I write a cover letter?", "reusable": false, "category": "unrelated"}
+{"new_prompt": "How do I reset my router?", "cached_prompt": "What is the tallest building in the world?", "reusable": false, "category": "unrelated"}
+{"new_prompt": "Explain the rules of chess.", "cached_prompt": "How do vaccines work?", "reusable": false, "category": "unrelated"}
+{"new_prompt": "What is inflation?", "cached_prompt": "How do I grow tomatoes?", "reusable": false, "category": "unrelated"}
+{"new_prompt": "How do I meditate?", "cached_prompt": "What is the Pythagorean theorem?", "reusable": false, "category": "unrelated"}
+{"new_prompt": "What is the population of France?", "cached_prompt": "What is the capital of France?", "reusable": false, "category": "topic_different"}
+{"new_prompt": "How do I uninstall Python?", "cached_prompt": "How do I install Python?", "reusable": false, "category": "topic_different"}
+{"new_prompt": "Who invented the light bulb?", "cached_prompt": "Who invented the telephone?", "reusable": false, "category": "topic_different"}
+{"new_prompt": "What is the freezing point of water?", "cached_prompt": "What is the boiling point of water?", "reusable": false, "category": "topic_different"}
+{"new_prompt": "How do I make coffee?", "cached_prompt": "How do I make tea?", "reusable": false, "category": "topic_different"}
+{"new_prompt": "What are the risks of exercise?", "cached_prompt": "What are the benefits of exercise?", "reusable": false, "category": "topic_different"}
+{"new_prompt": "How do I sort a list in Python?", "cached_prompt": "How do I create a list in Python?", "reusable": false, "category": "topic_different"}
+{"new_prompt": "Who wrote Hamlet?", "cached_prompt": "What is the plot of Hamlet?", "reusable": false, "category": "topic_different"}
+{"new_prompt": "How do I close a file in Python?", "cached_prompt": "How do I open a file in Python?", "reusable": false, "category": "topic_different"}
+{"new_prompt": "What is the deepest ocean?", "cached_prompt": "What is the largest ocean?", "reusable": false, "category": "topic_different"}
+{"new_prompt": "How do I tune a guitar?", "cached_prompt": "How do I learn guitar?", "reusable": false, "category": "topic_different"}
+{"new_prompt": "What is the speed of light?", "cached_prompt": "What is the speed of sound?", "reusable": false, "category": "topic_different"}
+{"new_prompt": "Explain machine learning in simple terms.", "cached_prompt": "What is machine learning?", "reusable": false, "category": "style_changed"}
+{"new_prompt": "Give me a detailed explanation of what a database is.", "cached_prompt": "What is a database?", "reusable": false, "category": "style_changed"}
+{"new_prompt": "Summarize the plot of Hamlet in one sentence.", "cached_prompt": "Summarize the plot of Hamlet.", "reusable": false, "category": "style_changed"}
+{"new_prompt": "Describe the water cycle briefly.", "cached_prompt": "Describe the water cycle.", "reusable": false, "category": "style_changed"}
