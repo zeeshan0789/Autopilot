@@ -13,6 +13,7 @@ from app.core.auth import ApiKeyInfo
 from app.core.cost import estimate_cost
 from app.core.executor import AllProvidersFailedError, execute_with_fallback
 from app.core.policy import RouteDecision, policy_router
+from app.core.prompts import PromptError, prompt_store
 from app.core.rate_limit import enforce_rate_limit
 from app.core.tracing import TraceData, schedule_trace
 from app.providers.base import ProviderRateLimitError
@@ -31,6 +32,10 @@ def add_route_headers(response: Response, decision: RouteDecision) -> None:
     if decision.routed:
         response.headers["X-Autopilot-Route"] = decision.rule
         response.headers["X-Autopilot-Routed-Model"] = decision.model
+
+def add_prompt_header(response: Response, trace: TraceData) -> None:
+    if trace.prompt_name is not None:
+        response.headers["X-Autopilot-Prompt"] = f"{trace.prompt_name}:{trace.prompt_version}"
 
 
 async def lookup_cache(request: ChatCompletionRequest, namespace: str) -> CacheLookup:
@@ -61,6 +66,19 @@ async def chat_completions(
             raise HTTPException(
                 status_code=400, detail="stream=true is not supported yet"
             )
+
+        # A request can ask for a managed prompt (versioned, with an A/B traffic split)
+        cache_namespace = api_key.key_id
+        if request.autopilot and request.autopilot.prompt:
+            try:
+                selected = await prompt_store.resolve(request)
+            except PromptError as e:
+                raise HTTPException(status_code=e.status_code, detail=str(e))
+            trace.prompt_name = selected.name
+            trace.prompt_version = selected.version
+            request = request.model_copy(update={"messages": selected.messages})
+            # Answers from different prompt versions must never be mixed by the cache
+            cache_namespace = f"{api_key.key_id}|{selected.name}:{selected.version}"
         # Model "auto" is routed by the policy. Any other model is used as requested.
         decision = policy_router.decide(request)
         trace.routed_model = decision.model
@@ -78,7 +96,7 @@ async def chat_completions(
             )
 
         # Each API key has its own cache, so one caller never sees another's answers
-        lookup = await lookup_cache(request, api_key.key_id)
+        lookup = await lookup_cache(request, cache_namespace)
         trace.cache_status = lookup.status
         trace.cache_reason = lookup.reason
         trace.cache_similarity = lookup.similarity
@@ -105,6 +123,7 @@ async def chat_completions(
             response.headers["X-Autopilot-Model"] = entry.served_model
             response.headers["X-Autopilot-Fallback"] = "false"
             add_route_headers(response, decision)
+            add_prompt_header(response, trace)
             return cache_service.response_from(entry)
 
         try:
@@ -162,4 +181,5 @@ async def chat_completions(
     response.headers["X-Autopilot-Model"] = result.model
     response.headers["X-Autopilot-Fallback"] = str(result.fallback_used).lower()
     add_route_headers(response, decision)
+    add_prompt_header(response, trace)
     return result.response

@@ -2,7 +2,10 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import Boolean, DateTime, Float, Integer, Numeric, String, Text, func
+from sqlalchemy import (
+    Boolean, DateTime, Float, ForeignKey, Integer, Numeric, String, Text,
+    UniqueConstraint, func, text,
+)
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -58,3 +61,39 @@ class Trace(Base):
     # Routing policy
     routed_model: Mapped[str | None] = mapped_column(String(128))
     policy_rule: Mapped[str | None] = mapped_column(String(64))
+    # Managed prompt (NULL when the request did not use one)
+    prompt_name: Mapped[str | None] = mapped_column(String(64), index=True)
+    prompt_version: Mapped[int | None] = mapped_column(Integer)
+
+class Prompt(Base):
+    """A named prompt that clients can ask for. Its versions are in prompt_versions."""
+
+    __tablename__ = "prompts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(64), unique=True)
+    description: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
+class PromptVersion(Base):
+    """One version of a prompt. The text of a version in use should never be edited."""
+
+    __tablename__ = "prompt_versions"
+    __table_args__ = (UniqueConstraint("prompt_id", "version"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    prompt_id: Mapped[int] = mapped_column(
+        ForeignKey("prompts.id", ondelete="CASCADE"), index=True
+    )
+    version: Mapped[int] = mapped_column(Integer)
+    system_prompt: Mapped[str] = mapped_column(Text)
+    user_template: Mapped[str | None] = mapped_column(Text)
+    # Share of the traffic. 0 means the version is not served (it can still be forced)
+    weight: Mapped[int] = mapped_column(Integer, server_default=text("0"))
+    notes: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )

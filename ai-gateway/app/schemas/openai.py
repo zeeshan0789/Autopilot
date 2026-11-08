@@ -9,6 +9,11 @@ class Message(BaseModel):
     role: Literal["system", "user", "assistant"]
     content: str
 
+class AutopilotOptions(BaseModel):
+    prompt: str | None = None  # name of a managed prompt (versioned and A/B tested)
+    variables: dict[str, str] = Field(default_factory=dict)
+    version: int | None = None  # force one version, for testing
+
 
 class ChatCompletionRequest(BaseModel):
     model: str
@@ -16,6 +21,8 @@ class ChatCompletionRequest(BaseModel):
     temperature: float | None = None
     max_tokens: int | None = None
     stream: bool = False
+    user: str | None = None
+    autopilot: AutopilotOptions | None = None
 
 
 class Usage(BaseModel):
