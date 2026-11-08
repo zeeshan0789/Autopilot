@@ -224,3 +224,49 @@ def test_high_similarity_and_guard_passes_is_a_hit():
         threshold=0.90,
     )
     assert decision.hit is True
+
+    # ---------- Guard v2: lowercase names, polarity words, style words ----------
+
+
+def test_lowercase_version_of_a_name_is_the_same_name():
+    assert allowed("what is the capital of france", "What is the capital of France?")
+    assert allowed("who wrote pride and prejudice", "Who wrote Pride and Prejudice?")
+
+
+def test_a_different_name_is_still_blocked_in_any_case():
+    assert blocked(
+        "what is the capital of germany", "What is the capital of France?", "entity_mismatch"
+    )
+    assert blocked(
+        "What is the capital of Germany?", "what is the capital of france", "entity_mismatch"
+    )
+
+
+@pytest.mark.parametrize(
+    "new,cached",
+    [
+        ("Is it illegal to record a phone call?", "Is it legal to record a phone call?"),
+        ("Is this statement false?", "Is this statement true?"),
+        ("Is this code unsafe?", "Is this code safe?"),
+    ],
+)
+def test_polarity_words_are_blocked(new, cached):
+    assert blocked(new, cached, "negation_mismatch")
+
+
+@pytest.mark.parametrize(
+    "new,cached",
+    [
+        ("Describe the water cycle briefly.", "Describe the water cycle."),
+        ("Give me a detailed explanation of what a database is.", "What is a database?"),
+        ("Explain machine learning in simple terms.", "What is machine learning?"),
+    ],
+)
+def test_style_words_are_blocked(new, cached):
+    assert blocked(new, cached, "style_mismatch")
+
+
+def test_same_style_word_on_both_sides_passes():
+    assert allowed(
+        "Give me a brief summary of Hamlet.", "Can you give a brief summary of Hamlet?"
+    )

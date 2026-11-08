@@ -99,27 +99,32 @@ def main() -> None:
     print()
     print("4. Suggested threshold (lowest one with zero false hits on this sample, plus a margin)")
     safe = lowest_safe_threshold(sweep(scored, default_thresholds(), use_guard=True), 0)
+    reference = current
     if safe is None:
         print("   No threshold up to 0.99 removes every false hit on this sample.")
         print("   Look at the false hits listed below: they need a better guard rule.")
-        recommended = None
     else:
         recommended = min(1.0, round(safe.threshold + args.margin, 2))
+        suggestion = evaluate(scored, recommended, use_guard=True)
         print(f"   lowest safe threshold {safe.threshold:.2f}, with margin {args.margin:.2f}: {recommended:.2f}")
-        describe("   at the suggestion", evaluate(scored, recommended, use_guard=True))
+        describe("   at the suggestion", suggestion)
+        if suggestion.recall is not None and suggestion.recall >= 0.5:
+            reference = recommended
+        else:
+            print("   This suggestion would serve almost nothing from the cache, so do not use it.")
+            print("   The remaining false hits (section 5) are too similar to real paraphrases for")
+            print("   any threshold to separate them. They need a better guard rule.")
 
     print()
     print_pairs(
         f"5. False hits at the current threshold {current:.2f} (guard on)",
         false_hit_pairs(scored, current, use_guard=True),
     )
-    if recommended is not None:
-        print()
-        print_pairs(
-            f"6. Reusable pairs the cache would still miss at {recommended:.2f} (guard on)",
-            missed_pairs(scored, recommended, use_guard=True),
-        )
-
+    print()
+    print_pairs(
+        f"6. Reusable pairs the cache would still miss at {reference:.2f} (guard on)",
+        missed_pairs(scored, reference, use_guard=True),
+    )
 
 if __name__ == "__main__":
     main()

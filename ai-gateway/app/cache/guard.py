@@ -50,6 +50,16 @@ def extract_numbers(text: str) -> list[str]:
 
 _WORD_RE = re.compile(r"[A-Za-z][A-Za-z0-9]*(?:['\u2019][A-Za-z]+)?")
 
+def _words(text: str) -> set[str]:
+    """All words of a text in lowercase, possessives stripped (France's becomes france)."""
+    words = set()
+    for token in _WORD_RE.findall(text):
+        word = token.lower().replace("\u2019", "'")
+        if word.endswith("'s"):
+            word = word[:-2]
+        words.add(word)
+    return words
+
 # Capitalized words that are not entities: question words, auxiliaries, pronouns
 # and common request verbs that start a sentence.
 _NOT_ENTITIES = {
@@ -93,6 +103,9 @@ _NEGATION_WORDS = {
     "without", "cannot", "cant", "dont", "doesnt", "didnt", "isnt", "arent",
     "wasnt", "werent", "wont", "wouldnt", "shouldnt", "couldnt", "hasnt",
     "havent", "hadnt",
+    # Words that flip the meaning without being a plain negation
+    "illegal", "unlawful", "unsafe", "false", "untrue", "incorrect",
+    "impossible", "invalid", "unhealthy", "forbidden", "prohibited",
 }
 
 
@@ -120,6 +133,21 @@ def is_time_sensitive(text: str) -> bool:
     """True when the answer depends on when it is asked (these must bypass the cache)."""
     return _TIME_SENSITIVE_RE.search(text) is not None
 
+# ---------- Style words ----------
+
+# Words that change how long or in what form the answer should be. "What is X?" and
+# "Explain X briefly" are about the same thing but need different answers.
+_STYLE_WORDS = {
+    "brief", "briefly", "short", "shorter", "shortest", "concise", "concisely",
+    "detailed", "detail", "details", "thorough", "thoroughly", "comprehensive",
+    "simple", "simply", "simplified", "eli5", "tldr", "bullet", "bullets",
+    "table", "essay", "paragraph", "paragraphs",
+}
+
+
+def extract_style_words(text: str) -> set[str]:
+    return {w for w in _words(text) if w in _STYLE_WORDS}
+
 
 # ---------- The guard and the final decision ----------
 
@@ -133,10 +161,18 @@ class GuardResult:
 def check_guard(new_text: str, cached_text: str) -> GuardResult:
     if extract_numbers(new_text) != extract_numbers(cached_text):
         return GuardResult(False, "number_mismatch")
-    if extract_entities(new_text) != extract_entities(cached_text):
+
+    # A name written in capitals on one side and in lowercase on the other is the same
+    # name, so each name must appear (in any case) as a word in the other text
+    new_entities = extract_entities(new_text)
+    cached_entities = extract_entities(cached_text)
+    if not (new_entities <= _words(cached_text) and cached_entities <= _words(new_text)):
         return GuardResult(False, "entity_mismatch")
+
     if extract_negations(new_text) != extract_negations(cached_text):
         return GuardResult(False, "negation_mismatch")
+    if extract_style_words(new_text) != extract_style_words(cached_text):
+        return GuardResult(False, "style_mismatch")
     return GuardResult(True, "ok")
 
 
