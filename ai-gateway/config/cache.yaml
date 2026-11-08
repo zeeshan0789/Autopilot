@@ -2,10 +2,11 @@
 cache:
   enabled: true
 
-  # STARTING VALUE ONLY. How similar two prompts must be before the cache may reuse an
-  # answer (0 to 1). It is tuned on a labeled sample in step P2.6. Higher means safer
-  # and fewer hits.
-  similarity_threshold: 0.90
+  # Chosen with scripts/tune_cache.py on 99 hand labeled pairs: no false hits from 0.82
+  # upward, recall 94% at 0.83 and 86% at 0.88. A value above the lowest safe one is used
+  # on purpose because the sample is small and was written by one person. Run tune_cache
+  # again after changing the guard or adding pairs.
+  similarity_threshold: 0.88
 
   # How long a cached answer stays valid, in seconds (3600 is one hour)
   ttl_seconds: 3600
