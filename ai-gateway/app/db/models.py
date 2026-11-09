@@ -97,3 +97,34 @@ class PromptVersion(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
+
+class ApiKey(Base):
+    """A gateway API key. Only the SHA 256 hash of the key is stored."""
+
+    __tablename__ = "api_keys"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    key_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    # First 8 characters of the hash: the short id used in traces and cache namespaces
+    key_id: Mapped[str] = mapped_column(String(16), index=True)
+    name: Mapped[str] = mapped_column(String(100))
+    rate_limit_per_min: Mapped[int] = mapped_column(Integer, server_default=text("60"))
+    active: Mapped[bool] = mapped_column(Boolean, server_default=text("true"))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class User(Base):
+    """A dashboard user. The Node.js web backend reads and writes this table."""
+
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    email: Mapped[str] = mapped_column(String(255), unique=True)
+    password_hash: Mapped[str] = mapped_column(String(100))
+    role: Mapped[str] = mapped_column(String(16), server_default=text("'admin'"))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
