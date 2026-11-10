@@ -8,6 +8,7 @@ export function loadConfig(env = process.env) {
   }
   return {
     port: Number(env.PORT ?? 3001),
+    host: env.HOST ?? "127.0.0.1",
     databaseUrl: env.DATABASE_URL ?? DEFAULT_DATABASE_URL,
     jwtSecret,
     jwtExpiresIn: env.JWT_EXPIRES_IN ?? "8h",

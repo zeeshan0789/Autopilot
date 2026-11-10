@@ -4,7 +4,7 @@ services:
     container_name: autopilot-redis
     ports:
       - "127.0.0.1:6379:6379"
-    # Rate limit counters temporary hain, disk pe save karne ki zarurat nahi
+    # Rate limit counters are temporary, no need to save them to disk
     command: ["redis-server", "--save", "", "--appendonly", "no"]
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
@@ -17,7 +17,7 @@ services:
     container_name: autopilot-postgres
     environment:
       POSTGRES_USER: autopilot
-      POSTGRES_PASSWORD: autopilot_dev # sirf local dev, port bahar nahi khula
+      POSTGRES_PASSWORD: autopilot_dev # local development only, the port is not exposed outside
       POSTGRES_DB: autopilot
     ports:
       - "127.0.0.1:5432:5432"
@@ -28,6 +28,36 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+
+  web-api:
+    build: ./web-api
+    container_name: autopilot-web-api
+    env_file: ./web-api/.env # JWT_SECRET and the rest (copy .env.example to .env first)
+    environment:
+      HOST: 0.0.0.0 # inside the container; the published port below is local only
+      PORT: "3001"
+      DATABASE_URL: postgres://autopilot:autopilot_dev@postgres:5432/autopilot
+    ports:
+      - "127.0.0.1:3001:3001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3001/api/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  dashboard:
+    build:
+      context: ./dashboard
+      args:
+        VITE_API_URL: http://127.0.0.1:3001
+    container_name: autopilot-dashboard
+    ports:
+      - "127.0.0.1:5173:80"
+    depends_on:
+      - web-api
 
 volumes:
   postgres_data:
