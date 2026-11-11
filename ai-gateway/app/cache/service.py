@@ -285,6 +285,8 @@ class CacheService:
     def _bypass_reason(self, request: ChatCompletionRequest) -> str | None:
         if not self.settings.enabled:
             return "disabled"
+        if request.autopilot is not None and not request.autopilot.cache:
+            return "opt_out"
         if request.stream:
             return "stream"
         if request.max_tokens is not None:

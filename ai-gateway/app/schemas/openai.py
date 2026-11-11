@@ -13,6 +13,7 @@ class AutopilotOptions(BaseModel):
     prompt: str | None = None  # name of a managed prompt (versioned and A/B tested)
     variables: dict[str, str] = Field(default_factory=dict)
     version: int | None = None  # force one version, for testing
+    cache: bool = True  # False: never serve or store this request from the semantic cache
 
 
 class ChatCompletionRequest(BaseModel):

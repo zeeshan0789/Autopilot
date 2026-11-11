@@ -228,6 +228,7 @@ def test_same_system_prompt_shares_the_cache():
         (dict(temperature=1.0), FRANCE, "high_temperature"),
         (dict(max_tokens=50), FRANCE, "max_tokens_set"),
         (dict(stream=True), FRANCE, "stream"),
+        (dict(autopilot={"cache": False}), FRANCE, "opt_out"),
         (dict(), "x" * 201, "prompt_too_long"),
         (dict(), "   ", "empty_prompt"),
     ],
