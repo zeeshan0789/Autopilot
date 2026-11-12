@@ -8,3 +8,4 @@ node_modules/
 *.log
 data/
 benchmarks/runs/
+benchmarks/judge_cache.jsonl
