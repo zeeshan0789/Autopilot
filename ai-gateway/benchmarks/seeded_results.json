@@ -1,0 +1,114 @@
+{
+  "summary": {
+    "bad_total": 0,
+    "bad_caught": 0,
+    "bad_warned": 0,
+    "bad_missed": 0,
+    "control_total": 0,
+    "false_blocks": 0,
+    "false_warnings": 0,
+    "not_evaluated": 10
+  },
+  "rows": [
+    {
+      "variant": "baseline_repeat",
+      "kind": "baseline_repeat",
+      "verdict": "NOT_ENOUGH_DATA",
+      "outcome": "not_evaluated",
+      "n_paired": 0,
+      "mean_diff": null,
+      "ci_low": null,
+      "ci_high": null
+    },
+    {
+      "variant": "one_word",
+      "kind": "bad",
+      "verdict": "NOT_ENOUGH_DATA",
+      "outcome": "not_evaluated",
+      "n_paired": 0,
+      "mean_diff": null,
+      "ci_low": null,
+      "ci_high": null
+    },
+    {
+      "variant": "always_french",
+      "kind": "bad",
+      "verdict": "NOT_ENOUGH_DATA",
+      "outcome": "not_evaluated",
+      "n_paired": 0,
+      "mean_diff": null,
+      "ci_low": null,
+      "ci_high": null
+    },
+    {
+      "variant": "refuses",
+      "kind": "bad",
+      "verdict": "NOT_ENOUGH_DATA",
+      "outcome": "not_evaluated",
+      "n_paired": 0,
+      "mean_diff": null,
+      "ci_low": null,
+      "ci_high": null
+    },
+    {
+      "variant": "verbose",
+      "kind": "bad",
+      "verdict": "NOT_ENOUGH_DATA",
+      "outcome": "not_evaluated",
+      "n_paired": 0,
+      "mean_diff": null,
+      "ci_low": null,
+      "ci_high": null
+    },
+    {
+      "variant": "ignores_format",
+      "kind": "bad",
+      "verdict": "NOT_ENOUGH_DATA",
+      "outcome": "not_evaluated",
+      "n_paired": 0,
+      "mean_diff": null,
+      "ci_low": null,
+      "ci_high": null
+    },
+    {
+      "variant": "no_digits",
+      "kind": "bad",
+      "verdict": "NOT_ENOUGH_DATA",
+      "outcome": "not_evaluated",
+      "n_paired": 0,
+      "mean_diff": null,
+      "ci_low": null,
+      "ci_high": null
+    },
+    {
+      "variant": "polite",
+      "kind": "control",
+      "verdict": "NOT_ENOUGH_DATA",
+      "outcome": "not_evaluated",
+      "n_paired": 0,
+      "mean_diff": null,
+      "ci_low": null,
+      "ci_high": null
+    },
+    {
+      "variant": "careful",
+      "kind": "control",
+      "verdict": "NOT_ENOUGH_DATA",
+      "outcome": "not_evaluated",
+      "n_paired": 0,
+      "mean_diff": null,
+      "ci_low": null,
+      "ci_high": null
+    },
+    {
+      "variant": "friendly",
+      "kind": "control",
+      "verdict": "NOT_ENOUGH_DATA",
+      "outcome": "not_evaluated",
+      "n_paired": 0,
+      "mean_diff": null,
+      "ci_low": null,
+      "ci_high": null
+    }
+  ]
+}

@@ -4,7 +4,7 @@ An OpenAI compatible LLM gateway prototype with a web dashboard. The gateway sit
 
 Everything runs locally for free: local models through Ollama and free API tiers. No billing, no credit card.
 
-**Status:** phases 1 to 3 are complete (gateway, routing policy and semantic cache, prompt versioning and the dashboard). Evaluation, an ML router and failure forensics are planned and not built yet.
+**Status:** phases 1 to 4 are complete (gateway, routing policy and semantic cache, prompt versioning and the dashboard, evaluation). An ML router and failure forensics are planned and not built yet.
 
 ## What it does today
 
@@ -29,6 +29,14 @@ Everything runs locally for free: local models through Ollama and free API tiers
 **Dashboard (React, Vite, Tailwind, Recharts)**
 
 - Login, overview with charts, traces, prompts and A/B, API keys (admin only)
+
+**Evaluation (Python)**
+
+- An eval set of 60 cases (factual, math, reasoning, instruction format, extraction, system prompt following, prompt injection) with deterministic checks: contains, JSON, number of bullets, numeric answers, forbidden text
+- A runner that sends the cases through the gateway with the cache off, retries rate limits, and refuses to score answers that a fallback model gave
+- An LLM judge with a rubric, calibrated against 50 answers that I labeled by hand (agreement, Cohen's kappa); it only adds to a score when it passes the calibration
+- A regression gate: two runs are compared case by case with a paired bootstrap, and a change is blocked only when the whole 95 percent interval is below zero
+- Seeded bad changes: deliberately broken prompt versions test the gate itself
 
 ## Architecture
 
@@ -148,6 +156,64 @@ Pairs with a changed year, negation or style word are as similar to the original
 - **Use `127.0.0.1`, not `localhost`, for services.** On Windows `localhost` can try IPv6 first and add a one second delay. Tests enforce this.
 - **Database changes go through Alembic.** A test fails if the models and the migrations disagree.
 
+## Evaluation
+
+The eval cases are in `ai-gateway/benchmarks/eval_cases.jsonl`. They are synthetic or public (free tier providers may use prompts), and the cache is switched off for eval requests (`autopilot.cache = false`) so a run measures the model, not the cache. A case score is the share of its checks that pass. Runs are stored as files and scored afterwards, so changing a check re-scores old runs.
+
+```
+python -m scripts.eval_run --name base --model openai/gpt-oss-20b           # run the cases
+python -m scripts.eval_label --runs benchmarks/runs/base.json --count 50     # label answers by hand
+python -m scripts.eval_judge calibrate                                       # is the LLM judge any good?
+python -m scripts.eval_compare benchmarks/runs/base.json benchmarks/runs/candidate.json   # exit code 1 on a regression
+python -m scripts.eval_seeded setup ; python -m scripts.eval_seeded run ; python -m scripts.eval_seeded report --markdown
+```
+
+**The regression gate.** Both runs are scored per case and the difference of every case is resampled 5000 times (paired bootstrap) to get a 95 percent interval for the average change. The verdict is `REGRESSION` (blocks, exit code 1) only when the whole interval is below zero and the average drop is at least 2 points. A drop whose interval includes zero is `INCONCLUSIVE_DROP`: possibly worse, the sample cannot tell. Every comparison prints the smallest average drop its sample can detect, because "no regression found" never means "no regression".
+
+**The LLM judge is one signal, not ground truth.** It is only trusted after its verdicts were compared with hand labels: enough labels (30 and at least 5 of each class), Cohen's kappa of 0.6 or more, and at least 70 percent of the answers I called bad also called bad by the judge. A calibration only counts for the exact judge model and rubric it was measured with. A trusted judge adds 30 percent to a score, otherwise it is ignored.
+
+(change            kind             verdict              change (points)  interval
+baseline_repeat   baseline_repeat  NOT_ENOUGH_DATA                  n/a  n/a
+one_word          bad              NOT_ENOUGH_DATA                  n/a  n/a
+always_french     bad              NOT_ENOUGH_DATA                  n/a  n/a
+refuses           bad              NOT_ENOUGH_DATA                  n/a  n/a
+verbose           bad              NOT_ENOUGH_DATA                  n/a  n/a
+ignores_format    bad              NOT_ENOUGH_DATA                  n/a  n/a
+no_digits         bad              NOT_ENOUGH_DATA                  n/a  n/a
+polite            control          NOT_ENOUGH_DATA                  n/a  n/a
+careful           control          NOT_ENOUGH_DATA                  n/a  n/a
+friendly          control          NOT_ENOUGH_DATA                  n/a  n/a
+
+Broken versions blocked: 0 of 0 (inconclusive drop: 0, missed: 0)
+Harmless versions wrongly blocked: 0 of 0 (wrongly flagged as inconclusive: 0)
+saved C:\Users\MR.SHAYAN\Desktop\Project\autopilot\ai-gateway\benchmarks\seeded_results.json
+
+====================================================================== paste this into README.md ======================================================================
+
+### Evaluation results
+
+**Regression gate on seeded bad changes.** A managed prompt got 0 deliberately broken versions and 0 harmless ones (a second run of the baseline and small wording changes). Each version was evaluatedon 0 cases (the cache off, one model, deterministic checks only) and compared with the baseline.
+
+- Broken versions blocked: **0 of 0**. Flagged as an inconclusive drop: 0. Missed: 0.
+- Harmless versions wrongly blocked: **0 of 0**. Wrongly flagged as an inconclusive drop: 0.
+
+| Change | Kind | Verdict | Average change (points) | 95% interval |
+|---|---|---|---|---|
+| baseline_repeat | baseline_repeat | NOT_ENOUGH_DATA | n/a | n/a |
+| one_word | bad | NOT_ENOUGH_DATA | n/a | n/a |
+| always_french | bad | NOT_ENOUGH_DATA | n/a | n/a |
+| refuses | bad | NOT_ENOUGH_DATA | n/a | n/a |
+| verbose | bad | NOT_ENOUGH_DATA | n/a | n/a |
+| ignores_format | bad | NOT_ENOUGH_DATA | n/a | n/a |
+| no_digits | bad | NOT_ENOUGH_DATA | n/a | n/a |
+| polite | control | NOT_ENOUGH_DATA | n/a | n/a |
+| careful | control | NOT_ENOUGH_DATA | n/a | n/a |
+| friendly | control | NOT_ENOUGH_DATA | n/a | n/a |
+
+The broken versions were designed by me, so this shows what the gate can catch, not how real regressions look. Each comparison has few cases, so small drops cannot be detected (every comparison prints the smallest drop it can detect).
+
+**LLM judge.** openai/gpt-oss-120b (rubric v1) was compared with 51 answers that I labeled by hand:agreement 59%, Cohen's kappa 0.02 (95% interval -0.11 to 0.15), it caught 50% of the answers I called bad. It is NOT trusted (fewer than 5 labels in one class (49 good, 2 bad); kappa 0.02 is below 0.6; the judge catches only 50% of the bad answers (needs 70%)). A judge only adds to a score when it is trusted.)
+
 ## Tests
 
 ```
@@ -170,9 +236,11 @@ cd ..\dashboard ; npm test     # dashboard formatting tests
 - Traces can be lost if the server stops right after a request or the database is down. Requests rejected by auth (401), validation (422) or the gateway rate limit are not traced.
 - The gateway does not run in Docker yet (it needs Ollama and the embedding model). No streaming.
 - The web API and the dashboard have no HTTPS and are meant for a local machine.
+- The eval set is small (60 cases, about 40 per seeded comparison) and was written by one person, so only large changes are detected. The hand labels for the judge come from one person and 50 answers: the kappa interval is wide.
+- The deterministic checks cannot judge nuance, and open questions (summaries, explanations) are only covered by the judge. The seeded bad changes were designed by me.
+- Eval runs use free tier models: free tier limits change and answers vary a little between runs even at temperature 0.
 
 ## Roadmap
 
-1. Evaluation: eval dataset, rule checks, an LLM judge calibrated on hand labels, regression detection
-2. ML router and failure forensics
-3. RAG and Text to SQL demos, a benchmark with real measurements, gateway in Docker, CI, demo video
+1. ML router and failure forensics
+2. RAG and Text to SQL demos, a benchmark with real measurements, gateway in Docker, CI, demo video
