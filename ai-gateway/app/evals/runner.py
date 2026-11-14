@@ -47,6 +47,9 @@ class CaseResult:
     fallback_used: bool = False
     latency_ms: int | None = None
     total_tokens: int | None = None
+    prompt_tokens: int | None = None
+    completion_tokens: int | None = None
+    request_id: str | None = None
     attempts: int = 0
     error: str | None = None
 
@@ -124,7 +127,27 @@ def _parse_success(response: httpx.Response) -> dict:
         "served_model": response.headers.get("x-autopilot-model"),
         "fallback_used": response.headers.get("x-autopilot-fallback") == "true",
         "total_tokens": (body.get("usage") or {}).get("total_tokens"),
+        "prompt_tokens": (body.get("usage") or {}).get("prompt_tokens"),
+        "completion_tokens": (body.get("usage") or {}).get("completion_tokens"),
+        "request_id": response.headers.get("x-request-id"),
     }
+
+def check_gateway(base_url: str, client=None) -> None:
+    """Fail fast, with a clear message, when the gateway cannot be reached."""
+    owns_client = client is None
+    client = client or httpx.Client(timeout=5.0)
+    try:
+        response = client.get(base_url.rstrip("/") + "/health")
+    except httpx.HTTPError as e:
+        raise EvalAbort(
+            f"cannot reach the gateway at {base_url} ({type(e).__name__}). "
+            "Start it with: uvicorn app.main:app --reload"
+        ) from e
+    finally:
+        if owns_client:
+            client.close()
+    if response.status_code != 200:
+        raise EvalAbort(f"the gateway at {base_url} answered http {response.status_code} on /health")
 
 
 async def run_case(client, case: EvalCase, config: RunConfig, sleep=asyncio.sleep) -> CaseResult:
