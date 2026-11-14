@@ -1,0 +1,65 @@
+{
+  "models": [
+    "qwen2.5:0.5b",
+    "openai/gpt-oss-20b",
+    "openai/gpt-oss-120b"
+  ],
+  "priors": {
+    "qwen2.5:0.5b": 0.45674740484429066,
+    "openai/gpt-oss-20b": 0.9826989619377162,
+    "openai/gpt-oss-120b": 0.9965397923875432
+  },
+  "boosters": {
+    "qwen2.5:0.5b": "qwen2.5_0.5b.txt"
+  },
+  "feature_names": [
+    "chars",
+    "words",
+    "lines",
+    "total_chars",
+    "messages",
+    "has_system",
+    "system_chars",
+    "digits",
+    "numbers",
+    "max_number_digits",
+    "question_marks",
+    "operators",
+    "quotes",
+    "commas",
+    "parentheses",
+    "upper_ratio",
+    "avg_word_len",
+    "longest_word",
+    "cue_only",
+    "cue_exactly",
+    "cue_at_most_least",
+    "cue_json",
+    "cue_list",
+    "cue_sort",
+    "cue_reverse",
+    "cue_sentence",
+    "cue_word",
+    "cue_letter",
+    "cue_capital",
+    "cue_symbol",
+    "cue_date",
+    "cue_total",
+    "cue_sequence",
+    "cue_how_many",
+    "cue_reply_with",
+    "cue_all_caps",
+    "cue_end_with"
+  ],
+  "version": "v1",
+  "created_at": "2026-11-14T18:47:03+00:00",
+  "tau": 0.89,
+  "tolerance": 0.01,
+  "baseline": "openai/gpt-oss-20b",
+  "trained_on": 287,
+  "test": {
+    "cases": 113,
+    "pass_rate": 0.9646017699115044,
+    "avg_cost_usd": 5.4401371681415934e-05
+  }
+}
