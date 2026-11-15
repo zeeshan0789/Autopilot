@@ -51,15 +51,23 @@
     "cue_all_caps",
     "cue_end_with"
   ],
-  "version": "v1",
-  "created_at": "2026-11-14T18:47:03+00:00",
-  "tau": 0.89,
+  "version": "v3",
+  "created_at": "2026-11-15T14:08:35+00:00",
+  "tau": 0.97,
+  "sim_threshold": 0.6523410887715676,
+  "abstain_share": 0.9,
   "tolerance": 0.01,
   "baseline": "openai/gpt-oss-20b",
+  "cv": "family",
   "trained_on": 287,
   "test": {
     "cases": 113,
-    "pass_rate": 0.9646017699115044,
-    "avg_cost_usd": 5.4401371681415934e-05
+    "pass_rate": 0.9734513274336283,
+    "avg_cost_usd": 6.450199115044247e-05
+  },
+  "handwritten": {
+    "cases": 60,
+    "pass_rate": 1.0,
+    "avg_cost_usd": 5.135425e-05
   }
 }

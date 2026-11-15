@@ -19,6 +19,9 @@ from app.mlrouter.evaluate import (
     roc_auc,
     rule_policy_picks,
     select_tau,
+    apply_pca,
+    fit_pca,
+    group_folds
 )
 from app.mlrouter.features import FEATURE_NAMES
 
@@ -191,3 +194,31 @@ def test_bootstrap_interval_is_tight_for_constant_values_and_wide_for_noisy_ones
     low, high = bootstrap_mean_ci([1.0] * 10 + [0.0] * 10)
     assert 0.2 < low < 0.5 < high < 0.8
     assert bootstrap_mean_ci([1, 0, 1, 1, 0, 1], seed=4) == bootstrap_mean_ci([1, 0, 1, 1, 0, 1], seed=4)
+
+def test_group_folds_give_every_group_its_own_fold():
+    assert list(group_folds(["a", "b", "a", "c", "b"])) == [0, 1, 0, 2, 1]
+
+
+def test_leave_one_group_out_predicts_a_group_with_a_model_that_never_saw_it():
+    rng = np.random.default_rng(0)
+    X = rng.random((240, 3))
+    first_group = np.arange(240) < 120
+    # In the first group the cheap model passes when x0 is large, in the second group the opposite
+    cheap = np.where(first_group, X[:, 0] > 0.5, X[:, 0] <= 0.5).astype(int)
+    dataset = make_dataset({"cheap": cheap, "strong": np.ones(240)}, {"cheap": np.zeros(240), "strong": np.ones(240)}, X=X)
+
+    oof = out_of_fold(dataset, ORDER, folds=np.where(first_group, 0, 1))
+    # The first group is predicted by a model that only learned the opposite rule
+    assert roc_auc(cheap[first_group], oof["cheap"][first_group]) < 0.2
+    assert roc_auc(cheap[~first_group], oof["cheap"][~first_group]) < 0.2
+
+
+def test_pca_keeps_the_directions_with_the_most_variance():
+    rng = np.random.default_rng(0)
+    data = rng.normal(size=(100, 3)) * np.array([5.0, 1.0, 0.1])
+    mean, components = fit_pca(data, 2)
+    projected = apply_pca(data, mean, components)
+    assert projected.shape == (100, 2)
+    assert projected[:, 0].std() > projected[:, 1].std() > 0.5
+    assert np.allclose(projected.mean(axis=0), 0, atol=1e-8)
+    assert apply_pca(data[:3], mean, components).shape == (3, 2)

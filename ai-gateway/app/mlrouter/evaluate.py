@@ -68,15 +68,22 @@ def make_folds(labels, k: int = 5, seed: int = 1) -> np.ndarray:
     return folds
 
 
-def out_of_fold(dataset: Dataset, models: list[str], k: int = 5, seed: int = 1, rounds=None, params=None) -> dict:
-    """Predictions for every row from a model that never saw that row."""
-    folds = make_folds(dataset.passed[models[0]], k, seed)
+def out_of_fold(dataset: Dataset, models: list[str], k: int = 5, seed: int = 1, rounds=None, params=None, folds=None) -> dict:
+    """Predictions for every row from a model that never saw that row.
+
+    folds gives the fold of every row, for example one fold per task family so that every row
+    is predicted by a model that never saw anything of its family. By default the rows are
+    split randomly into k folds.
+    """
+    if folds is None:
+        folds = make_folds(dataset.passed[models[0]], k, seed)
+    folds = np.asarray(folds)
     oof = {m: np.zeros(len(dataset)) for m in models}
     options = {} if rounds is None else {"rounds": rounds}
-    for fold in range(k):
+    for fold in sorted(set(folds.tolist())):
         train_rows = np.where(folds != fold)[0]
         test_rows = np.where(folds == fold)[0]
-        if len(test_rows) == 0:
+        if len(train_rows) == 0 or len(test_rows) == 0:
             continue
         train = dataset.subset(train_rows)
         router = RouterModel(models, params=params, seed=seed, **options).fit(train.X, train.passed)
@@ -84,6 +91,24 @@ def out_of_fold(dataset: Dataset, models: list[str], k: int = 5, seed: int = 1, 
         for m in models:
             oof[m][test_rows] = predicted[m]
     return oof
+
+def group_folds(groups) -> np.ndarray:
+    """One fold per distinct group (leave one group out)."""
+    names = sorted(set(groups))
+    index = {name: i for i, name in enumerate(names)}
+    return np.array([index[g] for g in groups], dtype=int)
+
+
+def fit_pca(matrix, components: int) -> tuple:
+    """(mean, components) of the top principal directions. Fit on training rows only."""
+    matrix = np.asarray(matrix, dtype=float)
+    mean = matrix.mean(axis=0)
+    _, _, vt = np.linalg.svd(matrix - mean, full_matrices=False)
+    return mean, vt[:components]
+
+
+def apply_pca(matrix, mean, components) -> np.ndarray:
+    return (np.asarray(matrix, dtype=float) - mean) @ components.T
 
 
 # ---------- Policies ----------
