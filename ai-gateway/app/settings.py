@@ -51,3 +51,9 @@ POLICY_CONFIG_PATH = BASE_DIR / "config" / "policy.yaml"
 
 def load_policy_config(path: Path | None = None) -> dict:
     return _load_yaml(path or POLICY_CONFIG_PATH).get("policy") or {}
+
+ROUTER_CONFIG_PATH = BASE_DIR / "config" / "router.yaml"
+
+
+def load_router_config(path: Path | None = None) -> dict:
+    return _load_yaml(path or ROUTER_CONFIG_PATH).get("router") or {}

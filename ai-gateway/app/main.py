@@ -7,6 +7,7 @@ from fastapi import FastAPI
 from app.api.chat import router as chat_router
 from app.cache.runtime import cache_service
 from app.core.rate_limit import limiter
+from app.mlrouter.runtime import ml_runtime
 
 # uvicorn's own logger, so INFO lines show up in the terminal
 logger = logging.getLogger("uvicorn.error")
@@ -38,6 +39,16 @@ async def lifespan(app: FastAPI):
         logger.info("Semantic cache is disabled in config/cache.yaml")
     yield
 
+    if ml_runtime.settings.enabled:
+        try:
+            await asyncio.to_thread(ml_runtime.warm_up)
+        except Exception as e:
+            logger.warning("Learned router warm up failed (%s)", e)
+        else:
+            if ml_runtime.available:
+                logger.info("Learned router ready: model '%s' is routed by it", ml_runtime.settings.alias)
+            else:
+                logger.warning("Learned router unavailable: model '%s' uses the rule policy", ml_runtime.settings.alias)
 
 app = FastAPI(title="Autopilot Gateway", lifespan=lifespan)
 

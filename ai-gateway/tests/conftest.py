@@ -1,4 +1,5 @@
 import pytest
+import types
 
 from app.cache.service import CacheService, CacheSettings
 from app.core.auth import KeyStore
@@ -49,3 +50,16 @@ def api_key(tmp_path, monkeypatch):
     key = store.create("test-key")
     monkeypatch.setattr("app.core.auth.key_store", store)
     return key
+
+class DisabledMlRuntime:
+    """Stands in for the learned router in tests that are not about it."""
+
+    settings = types.SimpleNamespace(enabled=False, alias="smart", shadow=False)
+
+    def decide(self, messages):
+        raise AssertionError("the learned router must not run in tests that are not about it")
+
+
+@pytest.fixture(autouse=True)
+def ml_router_off(monkeypatch):
+    monkeypatch.setattr("app.api.chat.ml_runtime", DisabledMlRuntime())

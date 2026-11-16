@@ -4,7 +4,7 @@ An OpenAI compatible LLM gateway prototype with a web dashboard. The gateway sit
 
 Everything runs locally for free: local models through Ollama and free API tiers. No billing, no credit card.
 
-**Status:** phases 1 to 4 are complete (gateway, routing policy and semantic cache, prompt versioning and the dashboard, evaluation). An ML router and failure forensics are planned and not built yet.
+**Status:** phases 1 to 5 are complete (gateway, routing policy and semantic cache, prompt versioning and the dashboard, evaluation, a learned router and failure forensics). RAG and Text to SQL demos, a benchmark with real measurements, the gateway in Docker and CI are planned and not built yet.
 
 ## What it does today
 
@@ -37,6 +37,11 @@ Everything runs locally for free: local models through Ollama and free API tiers
 - An LLM judge with a rubric, calibrated against 50 answers that I labeled by hand (agreement, Cohen's kappa); it only adds to a score when it passes the calibration
 - A regression gate: two runs are compared case by case with a paired bootstrap, and a change is blocked only when the whole 95 percent interval is below zero
 - Seeded bad changes: deliberately broken prompt versions test the gate itself
+
+**Learned router and forensics (Python)**
+
+- Model `smart`: a LightGBM router picks a model per prompt (local qwen, gpt-oss-20b or gpt-oss-120b), but only for prompts that look like the ones it was trained on (a novelty guard). Anything else goes to the rule policy. Requests for `auto` are also scored by it in shadow mode (only recorded in the trace)
+- Failure forensics: a deterministic checklist that explains why an eval answer was bad (refusal, fallback model, cache hit, routing decision, other model or prompt version than a baseline, latency, length), with the evidence for every finding and no invented confidence
 
 ## Architecture
 
@@ -160,6 +165,32 @@ Pairs with a changed year, negation or style word are as similar to the original
 
 The eval cases are in `ai-gateway/benchmarks/eval_cases.jsonl`. They are synthetic or public (free tier providers may use prompts), and the cache is switched off for eval requests (`autopilot.cache = false`) so a run measures the model, not the cache. A case score is the share of its checks that pass. Runs are stored as files and scored afterwards, so changing a check re-scores old runs.
 
+## Learned router
+
+`python -m scripts.router_collect ...` collects the answers of three models (qwen2.5:0.5b running locally, gpt-oss-20b, gpt-oss-120b) on 400 generated cases (12 task families, 3 difficulty levels, deterministic checks, a known correct answer for each) and on the 60 hand written eval cases. `python -m scripts.router_train` trains one LightGBM classifier per model that predicts "this model's answer passes every check" from 37 prompt features (lengths, digits, operators, cue words). The policy picks the cheapest model whose predicted pass probability is at least a threshold. Policies are compared by replaying the recorded outcomes: every case was answered by every model, so any policy can be evaluated exactly. The generated cases are split by a hash of their id into 287 for training and 113 for testing, and the 60 hand written cases are a third test with a different style of prompt.
+
+**What the measurements say**
+
+| Policy (test, 113 generated cases) | Pass rate | Estimated cost per request |
+|---|---|---|
+| always qwen2.5:0.5b | 51.3% | $0 (local, a notional price) |
+| always gpt-oss-20b | 97.3% | $0.000072 |
+| always gpt-oss-120b | 99.1% | $0.000080 |
+| rule policy (`auto`) | 97.3% | $0.000072 (it picks gpt-oss-20b for every one of these prompts) |
+| learned router with the novelty guard | 97.3% | $0.000065 (14% of the requests go to qwen) |
+| perfect router (the best any router could do) | 100% | $0.000039 |
+
+- On these prompts the router costs 10% less than always using gpt-oss-20b (the interval of the paired cost difference is $0.000004 to $0.000011 per request) and no pass rate difference can be measured (difference +0.0 points, 95% interval -2.7 to +2.7, 113 cases).
+- **It does not generalize to new kinds of prompts.** With random folds the cheap model's predictor has an AUC of 0.885, but when a whole task family is held out (leave one family out, 12 families) the AUC is 0.462, no better than chance. Much of what it learned is the templates of the generated prompts. A first version with a threshold chosen on random folds lost 6.7 points of pass rate on the hand written cases (95% interval -13.3 to -1.7).
+- Two changes came out of that measurement. The threshold is now chosen with leave one family out (0.97), and a **novelty guard** only lets the router decide for prompts that are similar to its training prompts (sentence embedding similarity of at least 0.652, the level below which 90% of the unfamiliar training prompts fall). 96.5% of the test prompts pass the guard against 31.7% of the hand written ones. With both, the router keeps the pass rate on the hand written cases at 100%, and saves 2% of the cost there (2% of the requests go to qwen).
+- The gap to the perfect router is large (52% on the generated cases, 70% on the hand written ones): most of the possible savings need a router that recognizes what kind of task a prompt is, and this one cannot yet.
+
+**Limits.** The generated cases are templates, so the in distribution result may be optimistic, and the hand written cases are mostly the same kinds of tasks (capitals, arithmetic, extraction), so they are not a real test of unfamiliar prompts. 20b and 120b differ by too little to measure on these prompts, so the router really chooses between a local model that is right about half the time and a stronger one. The qwen price is a placeholder: the real cost is CPU time, and qwen is not faster (about 1.1 seconds). Used from the API: `model: "smart"`. Router files live in `ai-gateway/models/router` (the gateway falls back to the rule policy when they are missing or were trained with other features).
+
+## Failure forensics
+
+`python -m scripts.forensics failures --run candidate --baseline base` explains every failed case of an eval run with a deterministic checklist: an empty answer or a refusal, an answer from a fallback model, a cache hit, the routing decision (rule or learned router), a different model or prompt version than the baseline, unusual latency or answer length, retries, and errors recorded by the gateway (from the trace rows, found through the request id). Each finding has a role (cause, context or info) and its evidence. When nothing explains a failure the tool says "no deterministic cause found", lists what it checked and what it could not check, and does not invent a probability.
+
 ```
 python -m scripts.eval_run --name base --model openai/gpt-oss-20b           # run the cases
 python -m scripts.eval_label --runs benchmarks/runs/base.json --count 50     # label answers by hand
@@ -239,6 +270,7 @@ cd ..\dashboard ; npm test     # dashboard formatting tests
 - The eval set is small (60 cases, about 40 per seeded comparison) and was written by one person, so only large changes are detected. The hand labels for the judge come from one person and 50 answers: the kappa interval is wide.
 - The deterministic checks cannot judge nuance, and open questions (summaries, explanations) are only covered by the judge. The seeded bad changes were designed by me.
 - Eval runs use free tier models: free tier limits change and answers vary a little between runs even at temperature 0.
+- The learned router decides only for prompts that look like its training prompts, and the training prompts are generated from templates. It adds a little latency (an embedding and a prediction per `smart` or `auto` request).
 
 ## Roadmap
 

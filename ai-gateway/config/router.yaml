@@ -1,0 +1,9 @@
+# The learned router (trained by scripts/router_train.py, saved in models/router).
+router:
+  enabled: true
+  # The model name that asks the gateway to use the learned router
+  alias: "smart"
+  model_dir: "models/router"
+  # Score requests for the rule policy alias ("auto") with the learned router too, without
+  # changing anything: its pick is only written to the trace.
+  shadow: true

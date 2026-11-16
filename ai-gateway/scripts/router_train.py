@@ -37,7 +37,7 @@ from app.mlrouter.evaluate import (
     rule_policy_picks,
     select_tau,
 )
-from app.mlrouter.features import FEATURE_NAMES
+from app.mlrouter.features import FEATURE_NAMES, prompt_text
 from app.mlrouter.model import RouterModel
 from app.mlrouter.novelty import (
     choose_similarity_threshold,
@@ -74,9 +74,6 @@ def last_user_text(case) -> str:
     return turns[-1] if turns else ""
 
 
-def prompt_text(case) -> str:
-    system = " ".join(m["content"] for m in case.messages if m["role"] == "system")
-    return (system + "\n" + last_user_text(case)).strip()
 
 
 def print_losses(dataset, probs, picks, models, baseline, limit=12) -> None:
@@ -152,7 +149,7 @@ def main() -> None:
 
     embedder = Embedder()
     embeddings = {
-        key: np.array([embedder.encode(prompt_text(c)) for c in dataset.cases], dtype=float)
+        key: np.array([embedder.encode(prompt_text(c.messages)) for c in dataset.cases], dtype=float)
         for key, dataset in (("train", train), ("test", test), ("hand", hand))
     }
 

@@ -42,6 +42,11 @@ class TraceData:
     policy_rule: str | None = None  # rule name, "default", "explicit" or "policy_error"
     prompt_name: str | None = None
     prompt_version: int | None = None
+    # Learned router (None when it was not consulted)
+    ml_pick: str | None = None
+    ml_status: str | None = None
+    ml_prob: float | None = None
+    ml_similarity: float | None = None
 
 
 async def record_trace(data: TraceData) -> None:

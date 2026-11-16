@@ -64,6 +64,11 @@ class Trace(Base):
     # Managed prompt (NULL when the request did not use one)
     prompt_name: Mapped[str | None] = mapped_column(String(64), index=True)
     prompt_version: Mapped[int | None] = mapped_column(Integer)
+    # Learned router (NULL when it was not consulted)
+    ml_pick: Mapped[str | None] = mapped_column(String(128))
+    ml_status: Mapped[str | None] = mapped_column(String(16), index=True)
+    ml_prob: Mapped[float | None] = mapped_column(Float)
+    ml_similarity: Mapped[float | None] = mapped_column(Float)
 
 class Prompt(Base):
     """A named prompt that clients can ask for. Its versions are in prompt_versions."""

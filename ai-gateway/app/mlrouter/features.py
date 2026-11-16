@@ -77,3 +77,9 @@ def extract_features(messages: list[dict]) -> list[float]:
     for name, pattern in _CUES.items():
         values[name] = 1 if pattern.search(everything) else 0
     return [float(values[name]) for name in FEATURE_NAMES]
+
+def prompt_text(messages: list[dict]) -> str:
+    """The text the novelty guard embeds: the system prompt and the last user message."""
+    system = " ".join(m["content"] for m in messages if m["role"] == "system")
+    turns = [m["content"] for m in messages if m["role"] != "system"]
+    return (system + "\n" + (turns[-1] if turns else "")).strip()

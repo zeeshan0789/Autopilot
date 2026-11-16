@@ -14,6 +14,7 @@ from app.core.cost import estimate_cost
 from app.core.executor import AllProvidersFailedError, execute_with_fallback
 from app.core.policy import RouteDecision, policy_router
 from app.core.prompts import PromptError, prompt_store
+from app.mlrouter.runtime import MlDecision, ml_runtime
 from app.core.rate_limit import enforce_rate_limit
 from app.core.tracing import TraceData, schedule_trace
 from app.providers.base import ProviderRateLimitError
@@ -37,6 +38,27 @@ def add_prompt_header(response: Response, trace: TraceData) -> None:
     if trace.prompt_name is not None:
         response.headers["X-Autopilot-Prompt"] = f"{trace.prompt_name}:{trace.prompt_version}"
 
+
+async def decide_ml(request: ChatCompletionRequest) -> MlDecision:
+    """Embedding and prediction are CPU work, so they run in a thread. The router must never break a request."""
+    try:
+        messages = [m.model_dump() for m in request.messages]
+        return await asyncio.to_thread(ml_runtime.decide, messages)
+    except Exception as e:
+        logger.warning("Learned router crashed, using the rule policy: %s", e)
+        return MlDecision(None, "error")
+
+
+def ml_route(request: ChatCompletionRequest, ml: MlDecision) -> RouteDecision:
+    if ml.model is not None and registry.for_model(ml.model):
+        return RouteDecision(ml.model, "ml_router", None, True)
+    # The router declined (an unfamiliar prompt) or failed: the rule policy decides, like for "auto"
+    fallback = policy_router.decide(request.model_copy(update={"model": policy_router.settings.alias}))
+    if fallback.routed:
+        model = fallback.model
+    else:
+        model = policy_router.settings.tiers[policy_router.settings.default_tier]
+    return RouteDecision(model, f"ml_{ml.status}>{fallback.rule}", fallback.tier, True)
 
 async def lookup_cache(request: ChatCompletionRequest, namespace: str) -> CacheLookup:
     """Embedding is CPU work, so it runs in a thread. The cache must never break a request."""
@@ -79,8 +101,22 @@ async def chat_completions(
             request = request.model_copy(update={"messages": selected.messages})
             # Answers from different prompt versions must never be mixed by the cache
             cache_namespace = f"{api_key.key_id}|{selected.name}:{selected.version}"
-        # Model "auto" is routed by the policy. Any other model is used as requested.
-        decision = policy_router.decide(request)
+        # Model "smart" is routed by the learned router, model "auto" by the rule policy (and scored
+        # silently by the learned router in shadow mode). Any other model is used as requested.
+        ml = None
+        ml_settings = ml_runtime.settings
+        if ml_settings.enabled and (
+            request.model == ml_settings.alias
+            or (ml_settings.shadow and request.model == policy_router.settings.alias)
+        ):
+            ml = await decide_ml(request)
+            trace.ml_pick, trace.ml_status = ml.model, ml.status
+            trace.ml_prob, trace.ml_similarity = ml.probability, ml.similarity
+
+        if ml is not None and request.model == ml_settings.alias:
+            decision = ml_route(request, ml)
+        else:
+            decision = policy_router.decide(request)
         trace.routed_model = decision.model
         trace.policy_rule = decision.rule
         if decision.routed:

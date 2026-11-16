@@ -34,3 +34,4 @@ fallbacks:
   "openai/gpt-oss-20b": ["qwen2.5:0.5b"]
   "mock-down": ["mock"]
   "mock-429": ["mock"]
+  "qwen2.5:0.5b": ["openai/gpt-oss-20b"]
