@@ -1,10 +1,10 @@
 # Autopilot
 
-An OpenAI compatible LLM gateway prototype with a web dashboard. The gateway sits between an application and its model providers and adds reliability (retries, fallback), access control (API keys, rate limiting), cost awareness (a safe semantic cache and a routing policy), prompt versioning with A/B traffic splits, and a trace for every request. A Node.js web API and a React dashboard show the numbers and manage keys and prompts.
+An OpenAI compatible LLM gateway with a web dashboard. The gateway sits between an application and its model providers and adds reliability (retries, fallback), access control (API keys, rate limiting), cost awareness (a safe semantic cache, a rule based routing policy and a learned router), prompt versioning with A/B traffic splits, and a trace for every request. A Node.js web API and a React dashboard show the numbers and manage keys and prompts. An evaluation harness measures answer quality, and a benchmark compares the gateway with calling a provider directly.
 
 Everything runs locally for free: local models through Ollama and free API tiers. No billing, no credit card.
 
-**Status:** phases 1 to 5 are complete (gateway, routing policy and semantic cache, prompt versioning and the dashboard, evaluation, a learned router and failure forensics). RAG and Text to SQL demos, a benchmark with real measurements, the gateway in Docker and CI are planned and not built yet.
+**Status:** the gateway, routing policy, semantic cache, prompt versioning, dashboard, evaluation, learned router, failure forensics and a first benchmark are built and measured. RAG and Text to SQL demos, the gateway in Docker and CI are planned and not built yet.
 
 ## What it does today
 
@@ -14,15 +14,15 @@ Everything runs locally for free: local models through Ollama and free API tiers
 - Providers are defined in config: local Ollama, Groq, and a mock provider that can simulate errors, 429s and timeouts
 - Timeouts, retries with exponential backoff and jitter, an ordered fallback chain per model
 - API keys stored as SHA 256 hashes in PostgreSQL, Redis rate limiting per key
-- Routing policy: `model: "auto"` lets declarative rules choose between a simple and a complex model
-- Safe semantic cache: similar prompts reuse an answer only if a guard confirms that numbers, years, names, negations and style words match
+- Routing: `model: "auto"` lets declarative rules choose between a simple and a complex model, `model: "smart"` uses a learned router (with the rules as its fallback)
+- Safe semantic cache: similar prompts reuse an answer only if a guard confirms that numbers, years, names, negations, style words and quoted text match
 - Managed prompts: named prompts with versions and a weighted A/B split (stable per `user`), filled with `{{variables}}`
-- A PostgreSQL trace for every request: requested, routed and served model, provider, cache result, prompt version, tokens, estimated cost, estimated savings, latency
+- A PostgreSQL trace for every request: requested, routed and served model, provider, cache result, prompt version, learned router prediction, tokens, estimated cost, estimated savings, latency
 
 **Web API (Node.js, Express)**
 
 - Dashboard login (JWT, bcrypt) with two roles: `admin` can do everything, `viewer` can only look
-- Create and revoke gateway API keys (the key is shown once, only its hash is stored), change limits
+- Create and revoke gateway API keys (a key is shown once, only its hash is stored), change limits
 - Create prompts, add versions (a version is never edited, a change is a new version), change weights
 - Stats: overview, time series, breakdowns by route, provider, model or cache result, A/B numbers per prompt version, recent traces
 
@@ -30,18 +30,13 @@ Everything runs locally for free: local models through Ollama and free API tiers
 
 - Login, overview with charts, traces, prompts and A/B, API keys (admin only)
 
-**Evaluation (Python)**
+**Evaluation and analysis (Python)**
 
-- An eval set of 60 cases (factual, math, reasoning, instruction format, extraction, system prompt following, prompt injection) with deterministic checks: contains, JSON, number of bullets, numeric answers, forbidden text
-- A runner that sends the cases through the gateway with the cache off, retries rate limits, and refuses to score answers that a fallback model gave
-- An LLM judge with a rubric, calibrated against 50 answers that I labeled by hand (agreement, Cohen's kappa); it only adds to a score when it passes the calibration
-- A regression gate: two runs are compared case by case with a paired bootstrap, and a change is blocked only when the whole 95 percent interval is below zero
-- Seeded bad changes: deliberately broken prompt versions test the gate itself
-
-**Learned router and forensics (Python)**
-
-- Model `smart`: a LightGBM router picks a model per prompt (local qwen, gpt-oss-20b or gpt-oss-120b), but only for prompts that look like the ones it was trained on (a novelty guard). Anything else goes to the rule policy. Requests for `auto` are also scored by it in shadow mode (only recorded in the trace)
-- Failure forensics: a deterministic checklist that explains why an eval answer was bad (refusal, fallback model, cache hit, routing decision, other model or prompt version than a baseline, latency, length), with the evidence for every finding and no invented confidence
+- An eval set of 60 hand written cases and 400 generated ones with deterministic checks
+- A runner that sends cases through the gateway with the cache off and refuses to score answers from a fallback model
+- An LLM judge calibrated against 50 answers that I labeled by hand
+- A regression gate with a paired bootstrap, tested with deliberately broken prompt versions
+- A learned router (LightGBM) with a novelty guard, failure forensics, and a benchmark with an injected outage
 
 ## Architecture
 
@@ -60,8 +55,8 @@ Request path inside the gateway:
   1. API key check            401 if missing or invalid (503 if the key store is down)
   2. Redis rate limit         429 if over the limit
   3. Managed prompt           pick a version (A/B), fill the template
-  4. Routing policy           model "auto" → simple or complex model (config/policy.yaml)
-  5. Semantic cache lookup    hit → answer returned, no provider call
+  4. Routing                  "auto": rule policy. "smart": learned router, rule policy as fallback
+  5. Semantic cache lookup    hit: answer returned, no provider call
   6. Provider call            timeout, retry with backoff, fallback chain
   7. Store the answer         never fallback answers, empty answers or refusals
   8. Estimated cost, then a trace row (background task, never blocks the response)
@@ -71,7 +66,7 @@ The Python gateway owns the database schema (Alembic migrations). The Node.js we
 
 ## Quick start (Windows PowerShell)
 
-Prerequisites: Python 3.11, Docker Desktop, Ollama, a free Groq API key (Node.js is only needed to develop the web API or dashboard outside Docker).
+Prerequisites: Python 3.11, Docker Desktop, Ollama, a free Groq API key (Node.js is only needed to develop the web API or the dashboard outside Docker).
 
 ```
 ollama pull qwen2.5:0.5b
@@ -106,90 +101,46 @@ $body = @{ model = "auto"; messages = @(@{ role = "user"; content = "What is the
 Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/v1/chat/completions -ContentType "application/json" -Headers @{ Authorization = "Bearer $key" } -Body $body
 ```
 
-Ask the same question twice and the second answer comes from the cache (`X-Autopilot-Cache: hit`).
-
-Managed prompts (A/B): create a prompt and versions in the dashboard (or `python -m scripts.prompts_admin`), then add `"autopilot": {"prompt": "support"}` to a request. Add `"user": "some id"` to keep one person on one version.
+Ask the same question twice and the second answer comes from the cache (`X-Autopilot-Cache: hit`). Managed prompts (A/B): create a prompt and versions in the dashboard (or `python -m scripts.prompts_admin`), then add `"autopilot": {"prompt": "support"}` to a request, and `"user": "some id"` to keep one person on one version.
 
 ## Response headers
 
-`X-Request-ID`, `X-Autopilot-Cache` (hit, miss, blocked, bypass), `X-Autopilot-Provider` (`cache` on a hit), `X-Autopilot-Model`, `X-Autopilot-Fallback`, `X-Autopilot-Route` and `X-Autopilot-Routed-Model` (only for `auto`), `X-Autopilot-Prompt` (`name:version`), `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `Retry-After` on a 429.
+`X-Request-ID`, `X-Autopilot-Cache` (hit, miss, blocked, bypass), `X-Autopilot-Provider` (`cache` on a hit), `X-Autopilot-Model`, `X-Autopilot-Fallback`, `X-Autopilot-Route` and `X-Autopilot-Routed-Model` (only for `auto` and `smart`), `X-Autopilot-Prompt` (`name:version`), `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `Retry-After` on a 429.
 
 ## Routing policy
 
-Rules live in `ai-gateway/config/policy.yaml`: the first matching rule wins, otherwise the default tier is used. Conditions are length, history length, number of questions, requested output size, keywords and code detection. The shipped rules send code, analysis style keywords, long prompts, long conversations, multi part questions and large outputs to `openai/gpt-oss-120b`, and everything else to `openai/gpt-oss-20b`. These rules are heuristics with untuned thresholds. Nothing here shows that they improve answer quality: that needs the evaluation planned for phase 4. The list price gap between the two models is small, so today the main purpose is sending hard prompts to the bigger model and building the mechanism a learned router will later use.
+Rules live in `ai-gateway/config/policy.yaml`: the first matching rule wins, otherwise the default tier is used. Conditions are length, history length, number of questions, requested output size, keywords and code detection. The shipped rules send code, analysis style keywords, long prompts, long conversations, multi part questions and large outputs to `openai/gpt-oss-120b`, and everything else to `openai/gpt-oss-20b`. These rules are heuristics with untuned thresholds. Nothing here shows that they improve answer quality. On the 60 hand written and the 113 generated test prompts used below, the rules picked `gpt-oss-20b` for every prompt, so they changed nothing there.
 
 ## Semantic cache
 
 - **Scope:** entries are only compared within the same API key, resolved model, system prompt, temperature bucket and prompt version, so A/B variants never share answers.
 - **Embeddings:** `all-MiniLM-L6-v2` (local, 384 dimensions, input truncated at 256 tokens, so prompts longer than 800 characters skip the cache). Nearest entries are found with FAISS.
-- **Hit rule:** similarity at or above the threshold (`config/cache.yaml`) and a passing guard.
-- **Guard:** numbers (in order, digits and number words), years, names (capitalized words, compared in any case), negations and polarity words (not, never, illegal, false...) and style words (briefly, detailed, simple...) must match.
-- **Never cached or never looked up:** time sensitive prompts, high temperature, `max_tokens`, streaming, fallback answers, empty answers and short refusals.
+- **Hit rule:** similarity at or above the threshold (`config/cache.yaml`, 0.88) and a passing guard.
+- **Guard:** numbers (in order, digits and number words), years, names (capitalized words, compared in any case), negations and polarity words (not, never, illegal, false...), style words (briefly, detailed, simple...) and quoted text must match. An optional strict mode (`strict_words: true`) also requires every other content word to match.
+- **Never cached or never looked up:** time sensitive prompts, high temperature, `max_tokens`, streaming, requests that opt out (`autopilot.cache = false`), fallback answers, empty answers and short refusals.
 - **Fails open:** if embedding or lookup breaks, the request goes to the provider.
 
 ### Measuring the cache
 
 ```
 python -m scripts.tune_cache                 # threshold sweep on labeled prompt pairs
+python -m scripts.tune_cache --strict-words  # the same with the strict guard
 python -m scripts.cache_report --hours 24    # hit rate, tokens and estimated cost saved, latency
 ```
 
-`benchmarks/cache_pairs.jsonl` holds 99 hand labeled pairs (36 whose answer can be reused, 63 where it cannot). A hit on a pair that cannot be reused is a false hit, a wrong answer. Result on that sample at the shipped threshold of 0.88:
+`benchmarks/cache_pairs.jsonl` holds 99 hand labeled pairs (36 whose answer can be reused, 63 where it cannot). A hit on a pair that cannot be reused is a false hit, a wrong answer. At the shipped threshold of 0.88:
 
 | | hits | false hits | reusable pairs served |
 |---|---|---|---|
-| similarity threshold only | 54 | 21 (38.9%) | 28 of 36 |
+| similarity threshold only | 54 | 21 (38.9%) | 33 of 36 |
 | threshold plus guard | 31 | 0 (0.0%, 95% interval 0% to 11%) | 31 of 36 (86.1%) |
+| threshold plus strict word guard | 8 | 0 | 8 of 36 (22.2%) |
 
-Pairs with a changed year, negation or style word are as similar to the original as real paraphrases (median similarity 0.90 to 0.95 against 0.94 for paraphrases), so no threshold alone can separate them. How to read the numbers: the guard rules were developed while looking at these same pairs, so the figures are optimistic and must be confirmed on new pairs; 99 pairs written by one person is a small sample, hence the wide interval; and false hits cannot be measured from traffic because traces do not store prompts.
-
-## Security notes
-
-- Gateway API keys and dashboard passwords are stored as hashes (SHA 256 for keys, bcrypt for passwords). A new key is shown once.
-- A revoked key can keep working for up to 10 seconds (the gateway remembers key checks for that long). If PostgreSQL is down, a recently seen key keeps working and an unknown key gets 503; nothing is let in by default.
-- The web API needs `JWT_SECRET` (32+ characters), limits login attempts, answers wrong email and wrong password the same way, and only allows the dashboard origin. The dashboard keeps its token in `sessionStorage`. Hiding buttons from viewers is cosmetic, the web API enforces the roles.
-- Everything listens on `127.0.0.1` only. There is no HTTPS: this is a local prototype, not a deployment.
-- The development database password in `docker-compose.yml` is for local use only.
-
-## Design decisions
-
-- **A wrong cached answer is worse than a miss.** The guard is strict and the threshold sits above the lowest safe value on purpose.
-- **The cache and tracing never break a request.** Errors are caught, logged and the request continues.
-- **The rate limiter fails open.** If Redis is down, requests pass and a warning is logged. The gateway pings Redis at startup.
-- **A prompt version is never edited.** A change is a new version, otherwise past A/B numbers would stop meaning anything.
-- **Cost uses `Decimal` and the model that actually answered.** On a cache hit the trace records zero tokens and cost for the request, and `saved_tokens` and `saved_cost_usd` for what the cache avoided.
-- **Use `127.0.0.1`, not `localhost`, for services.** On Windows `localhost` can try IPv6 first and add a one second delay. Tests enforce this.
-- **Database changes go through Alembic.** A test fails if the models and the migrations disagree.
+Pairs with a changed year, negation or style word are as similar to the original as real paraphrases, so no threshold alone can separate them. The guard rules were developed while looking at these same pairs, so the figures are optimistic, and 99 pairs written by one person is a small sample. The strict guard removes almost every false hit but also blocks about 90% of the real paraphrases (27 of 30), so it is off by default.
 
 ## Evaluation
 
-The eval cases are in `ai-gateway/benchmarks/eval_cases.jsonl`. They are synthetic or public (free tier providers may use prompts), and the cache is switched off for eval requests (`autopilot.cache = false`) so a run measures the model, not the cache. A case score is the share of its checks that pass. Runs are stored as files and scored afterwards, so changing a check re-scores old runs.
-
-## Learned router
-
-`python -m scripts.router_collect ...` collects the answers of three models (qwen2.5:0.5b running locally, gpt-oss-20b, gpt-oss-120b) on 400 generated cases (12 task families, 3 difficulty levels, deterministic checks, a known correct answer for each) and on the 60 hand written eval cases. `python -m scripts.router_train` trains one LightGBM classifier per model that predicts "this model's answer passes every check" from 37 prompt features (lengths, digits, operators, cue words). The policy picks the cheapest model whose predicted pass probability is at least a threshold. Policies are compared by replaying the recorded outcomes: every case was answered by every model, so any policy can be evaluated exactly. The generated cases are split by a hash of their id into 287 for training and 113 for testing, and the 60 hand written cases are a third test with a different style of prompt.
-
-**What the measurements say**
-
-| Policy (test, 113 generated cases) | Pass rate | Estimated cost per request |
-|---|---|---|
-| always qwen2.5:0.5b | 51.3% | $0 (local, a notional price) |
-| always gpt-oss-20b | 97.3% | $0.000072 |
-| always gpt-oss-120b | 99.1% | $0.000080 |
-| rule policy (`auto`) | 97.3% | $0.000072 (it picks gpt-oss-20b for every one of these prompts) |
-| learned router with the novelty guard | 97.3% | $0.000065 (14% of the requests go to qwen) |
-| perfect router (the best any router could do) | 100% | $0.000039 |
-
-- On these prompts the router costs 10% less than always using gpt-oss-20b (the interval of the paired cost difference is $0.000004 to $0.000011 per request) and no pass rate difference can be measured (difference +0.0 points, 95% interval -2.7 to +2.7, 113 cases).
-- **It does not generalize to new kinds of prompts.** With random folds the cheap model's predictor has an AUC of 0.885, but when a whole task family is held out (leave one family out, 12 families) the AUC is 0.462, no better than chance. Much of what it learned is the templates of the generated prompts. A first version with a threshold chosen on random folds lost 6.7 points of pass rate on the hand written cases (95% interval -13.3 to -1.7).
-- Two changes came out of that measurement. The threshold is now chosen with leave one family out (0.97), and a **novelty guard** only lets the router decide for prompts that are similar to its training prompts (sentence embedding similarity of at least 0.652, the level below which 90% of the unfamiliar training prompts fall). 96.5% of the test prompts pass the guard against 31.7% of the hand written ones. With both, the router keeps the pass rate on the hand written cases at 100%, and saves 2% of the cost there (2% of the requests go to qwen).
-- The gap to the perfect router is large (52% on the generated cases, 70% on the hand written ones): most of the possible savings need a router that recognizes what kind of task a prompt is, and this one cannot yet.
-
-**Limits.** The generated cases are templates, so the in distribution result may be optimistic, and the hand written cases are mostly the same kinds of tasks (capitals, arithmetic, extraction), so they are not a real test of unfamiliar prompts. 20b and 120b differ by too little to measure on these prompts, so the router really chooses between a local model that is right about half the time and a stronger one. The qwen price is a placeholder: the real cost is CPU time, and qwen is not faster (about 1.1 seconds). Used from the API: `model: "smart"`. Router files live in `ai-gateway/models/router` (the gateway falls back to the rule policy when they are missing or were trained with other features).
-
-## Failure forensics
-
-`python -m scripts.forensics failures --run candidate --baseline base` explains every failed case of an eval run with a deterministic checklist: an empty answer or a refusal, an answer from a fallback model, a cache hit, the routing decision (rule or learned router), a different model or prompt version than the baseline, unusual latency or answer length, retries, and errors recorded by the gateway (from the trace rows, found through the request id). Each finding has a role (cause, context or info) and its evidence. When nothing explains a failure the tool says "no deterministic cause found", lists what it checked and what it could not check, and does not invent a probability.
+The eval cases are in `ai-gateway/benchmarks/eval_cases.jsonl` (60 hand written, synthetic or public, because free tier providers may use prompts). The cache is switched off for eval requests, so a run measures the model and not the cache. A case score is the share of its deterministic checks that pass (contains, JSON, number of bullets, numeric answers, forbidden text). Runs are stored as files and scored afterwards, so changing a check re-scores old runs.
 
 ```
 python -m scripts.eval_run --name base --model openai/gpt-oss-20b           # run the cases
@@ -199,51 +150,87 @@ python -m scripts.eval_compare benchmarks/runs/base.json benchmarks/runs/candida
 python -m scripts.eval_seeded setup ; python -m scripts.eval_seeded run ; python -m scripts.eval_seeded report --markdown
 ```
 
-**The regression gate.** Both runs are scored per case and the difference of every case is resampled 5000 times (paired bootstrap) to get a 95 percent interval for the average change. The verdict is `REGRESSION` (blocks, exit code 1) only when the whole interval is below zero and the average drop is at least 2 points. A drop whose interval includes zero is `INCONCLUSIVE_DROP`: possibly worse, the sample cannot tell. Every comparison prints the smallest average drop its sample can detect, because "no regression found" never means "no regression".
+**The regression gate.** Both runs are scored per case and the difference of every case is resampled 5000 times (paired bootstrap) to get a 95 percent interval for the average change. The verdict is `REGRESSION` (blocks, exit code 1) only when the whole interval is below zero and the average drop is at least 2 points. A drop whose interval includes zero is `INCONCLUSIVE_DROP`: possibly worse, the sample cannot tell. Every comparison prints the smallest average drop its sample can detect, because "no regression found" never means "no regression". The gate was tested with deliberately broken prompt versions (answer in one word, always answer in French, refuse everything...) and harmless wording changes: the results are saved in `benchmarks/seeded_results.json`.
 
-**The LLM judge is one signal, not ground truth.** It is only trusted after its verdicts were compared with hand labels: enough labels (30 and at least 5 of each class), Cohen's kappa of 0.6 or more, and at least 70 percent of the answers I called bad also called bad by the judge. A calibration only counts for the exact judge model and rubric it was measured with. A trusted judge adds 30 percent to a score, otherwise it is ignored.
+**The LLM judge is one signal, not ground truth.** It is only trusted after its verdicts were compared with 50 hand labels: Cohen's kappa of 0.6 or more, and at least 70 percent of the answers I called bad also called bad by the judge. A calibration only counts for the exact judge model and rubric it was measured with (the result is saved in `benchmarks/judge_calibration.json`). A trusted judge adds 30 percent to a score, otherwise it is ignored.
 
-(change            kind             verdict              change (points)  interval
-baseline_repeat   baseline_repeat  NOT_ENOUGH_DATA                  n/a  n/a
-one_word          bad              NOT_ENOUGH_DATA                  n/a  n/a
-always_french     bad              NOT_ENOUGH_DATA                  n/a  n/a
-refuses           bad              NOT_ENOUGH_DATA                  n/a  n/a
-verbose           bad              NOT_ENOUGH_DATA                  n/a  n/a
-ignores_format    bad              NOT_ENOUGH_DATA                  n/a  n/a
-no_digits         bad              NOT_ENOUGH_DATA                  n/a  n/a
-polite            control          NOT_ENOUGH_DATA                  n/a  n/a
-careful           control          NOT_ENOUGH_DATA                  n/a  n/a
-friendly          control          NOT_ENOUGH_DATA                  n/a  n/a
+## Learned router
 
-Broken versions blocked: 0 of 0 (inconclusive drop: 0, missed: 0)
-Harmless versions wrongly blocked: 0 of 0 (wrongly flagged as inconclusive: 0)
-saved C:\Users\MR.SHAYAN\Desktop\Project\autopilot\ai-gateway\benchmarks\seeded_results.json
+`scripts.router_collect` collects the answers of three models (qwen2.5:0.5b running locally, gpt-oss-20b, gpt-oss-120b) on 400 generated cases (12 task families, 3 difficulty levels, deterministic checks, a reference answer for each) and on the 60 hand written cases. `scripts.router_train` trains one LightGBM classifier per model that predicts "this model's answer passes every check" from 37 prompt features (lengths, digits, operators, cue words). The policy picks the cheapest model whose predicted pass probability is at least a threshold. Policies are compared by replaying the recorded outcomes: every case was answered by every model, so any policy can be evaluated exactly. The generated cases are split by a hash of their id into 287 for training and 113 for testing. The 60 hand written cases are a third test with a different style of prompt.
 
-====================================================================== paste this into README.md ======================================================================
+| Policy (113 generated test cases) | Pass rate | Estimated cost per request |
+|---|---|---|
+| always qwen2.5:0.5b | 51.3% | $0 (local, a notional price) |
+| always gpt-oss-20b | 97.3% | $0.000072 |
+| always gpt-oss-120b | 99.1% | $0.000080 |
+| rule policy (`auto`) | 97.3% | $0.000072 (it picks gpt-oss-20b for every prompt) |
+| learned router with the novelty guard | 97.3% | $0.000065 (14% of the requests go to qwen) |
+| perfect router (the best any router could do) | 100% | $0.000039 |
 
-### Evaluation results
+- On these prompts the router costs 10% less than always using gpt-oss-20b (95% interval of the paired cost difference: $0.000004 to $0.000011 per request), and no pass rate difference can be measured (+0.0 points, 95% interval -2.7 to +2.7, 113 cases). A perfect router would cost 52% less than always using gpt-oss-120b, the learned one 19% less.
+- **It does not generalize to new kinds of prompts.** With random folds the predictor of the cheap model has an AUC of 0.885, but when a whole task family is held out (leave one family out, 12 families) the AUC is 0.462, no better than chance. Much of what it learned is the templates of the generated prompts. A first version, with a threshold chosen on random folds, lost 6.7 points of pass rate on the hand written cases (95% interval -13.3 to -1.7).
+- Two changes came out of that measurement. The threshold is now chosen with leave one family out (0.97), and a **novelty guard** only lets the router decide for prompts that are similar to its training prompts (sentence embedding similarity of at least 0.652, the level below which 90% of the unfamiliar training prompts fall). 96.5% of the test prompts pass the guard against 31.7% of the hand written ones. On the hand written cases the router now keeps the pass rate at 100% and saves 2% of the cost (2% of the requests go to qwen). Adding semantic (embedding) features did not help (leave one family out AUC 0.427).
+- Through the gateway (`model: "smart"`), the 60 hand written cases all passed (100%, no invalid answers, average latency 1108 ms).
 
-**Regression gate on seeded bad changes.** A managed prompt got 0 deliberately broken versions and 0 harmless ones (a second run of the baseline and small wording changes). Each version was evaluatedon 0 cases (the cache off, one model, deterministic checks only) and compared with the baseline.
+**Limits.** The generated cases are templates, so the in distribution result may be optimistic, and the hand written cases are mostly the same kinds of tasks (capitals, arithmetic, extraction), so they are not a real test of unfamiliar prompts. gpt-oss-20b and gpt-oss-120b differ by too little to measure on these prompts, so the router really chooses between a local model that is right about half the time and a stronger one. The qwen price is a placeholder: the real cost is CPU time, and qwen is not faster (about 1.1 seconds). The router decides for a prompt only if it looks like its training prompts, and it adds an embedding and a prediction (a few milliseconds) to `smart` and `auto` requests (the latter in shadow mode: the prediction is only written to the trace). The router files are in `ai-gateway/models/router`, and the gateway falls back to the rule policy when they are missing or were trained with other features.
 
-- Broken versions blocked: **0 of 0**. Flagged as an inconclusive drop: 0. Missed: 0.
-- Harmless versions wrongly blocked: **0 of 0**. Wrongly flagged as an inconclusive drop: 0.
+## Failure forensics
 
-| Change | Kind | Verdict | Average change (points) | 95% interval |
+`python -m scripts.forensics failures --run candidate --baseline base` explains every failed case of an eval run with a deterministic checklist: an empty answer or a refusal, an answer from a fallback model, a cache hit, the routing decision (rule or learned router), a different model or prompt version than the baseline, unusual latency or answer length, retries, and errors recorded by the gateway (from the trace rows, found through the request id). Each finding has a role (cause, context or info) and its evidence. When nothing explains a failure the tool says so, lists what it checked and what it could not check, and does not invent a probability. On a run with the weak local model (21 of 60 cases failed) it attributes every failure to the difference in model, and it notes an unusual latency on a few. It cannot say why one model fails on one prompt.
+
+## Benchmark
+
+`python -m scripts.bench run` sends a fixed workload of 150 requests (60 unique prompts, 50 exact repeats, 40 lightly reworded repeats) built from the generated cases to `openai/gpt-oss-20b` at temperature 0, in four modes: directly to the provider, through the gateway with its default guard, through the gateway with similarity only (guard off), and through the gateway with the strict word guard. A simulated outage of the primary provider covers requests 46 to 90 (every mode alike). Quality is measured with the deterministic checks, and an error counts as a failed request. Cost is estimated at list prices. The gateway ran in the same process as the benchmark, and the provider calls are real.
+
+| | Direct to the provider | Autopilot | Autopilot, similarity only (guard off) | Autopilot, strict word guard |
 |---|---|---|---|---|
-| baseline_repeat | baseline_repeat | NOT_ENOUGH_DATA | n/a | n/a |
-| one_word | bad | NOT_ENOUGH_DATA | n/a | n/a |
-| always_french | bad | NOT_ENOUGH_DATA | n/a | n/a |
-| refuses | bad | NOT_ENOUGH_DATA | n/a | n/a |
-| verbose | bad | NOT_ENOUGH_DATA | n/a | n/a |
-| ignores_format | bad | NOT_ENOUGH_DATA | n/a | n/a |
-| no_digits | bad | NOT_ENOUGH_DATA | n/a | n/a |
-| polite | control | NOT_ENOUGH_DATA | n/a | n/a |
-| careful | control | NOT_ENOUGH_DATA | n/a | n/a |
-| friendly | control | NOT_ENOUGH_DATA | n/a | n/a |
+| Requests answered | 105 of 150 | 150 of 150 | 150 of 150 | 150 of 150 |
+| Correct answers | 99 (66.0%) | 123 (82.0%) | 114 (76.0%) | 132 (88.0%) |
+| Correct outside the outage | 94.3% | 87.6% | 80.0% | 94.3% |
+| Correct during the outage | 0.0% | 68.9% | 66.7% | 73.3% |
+| Cache hits | 0 | 69 | 74 | 65 |
+| Wrong answers served from the cache | 0 | 14 | 24 | 5 |
+| of which repeats of an earlier wrong answer | 0 | 5 | 5 | 5 |
+| of which the answer written for another prompt | 0 | 9 | 19 | 0 |
+| Answers from a fallback model | 0 | 30 | 28 | 31 |
+| Latency p50 / p95 | 789 ms / 1,275 ms | 456 ms / 1,458 ms | 379 ms / 1,613 ms | 567 ms / 1,257 ms |
+| Estimated cost | $0.007088 | $0.003567 | $0.003427 | $0.003842 |
+| Cost against direct | +0% | -50% | -52% | -46% |
 
-The broken versions were designed by me, so this shows what the gate can catch, not how real regressions look. Each comparison has few cases, so small drops cannot be detected (every comparison prints the smallest drop it can detect).
+Correct answers against direct, paired by request (95% interval):
 
-**LLM judge.** openai/gpt-oss-120b (rubric v1) was compared with 51 answers that I labeled by hand:agreement 59%, Cohen's kappa 0.02 (95% interval -0.11 to 0.15), it caught 50% of the answers I called bad. It is NOT trusted (fewer than 5 labels in one class (49 good, 2 bad); kappa 0.02 is below 0.6; the judge catches only 50% of the bad answers (needs 70%)). A judge only adds to a score when it is trusted.)
+| | all 150 requests | outside the outage (105) | during the outage (45) |
+|---|---|---|---|
+| Autopilot | +16.0 points (+8.0 to +23.3) | **-6.7 points (-11.4 to -1.9)** | +68.9 points (+55.6 to +82.2) |
+| Autopilot, similarity only | +10.0 points (+1.3 to +18.0) | -14.3 points (-21.9 to -7.6) | +66.7 points (+53.3 to +80.0) |
+| Autopilot, strict word guard | +22.0 points (+15.3 to +28.7) | +0.0 points (+0.0 to +0.0) | +73.3 points (+60.0 to +86.7) |
+
+What this shows, and what it does not:
+
+- **Most of the gain in correct answers comes from the outage**, not from the cache: with the primary provider down, the gateway answered all 45 requests (from the cache or from the local fallback model, which is weaker, 68.9% correct) while calling the provider directly failed all of them. The cost and the latency of the cache are real benefits (about half the cost, a lower p50).
+- **Outside the outage the default cache cost quality** (-6.7 points). Of its 14 wrong answers from the cache, 9 were the answer written for another prompt: prompts that differ only by lowercase words, such as the keys of a requested JSON object ("keys id, city, email and age" against "keys country, age, job, id and city"), which the default guard cannot see. The other 5 were repeats of an earlier wrong answer of the model itself (the model reversed "planet" as "netalp", and the cache repeated it): a cache cannot know that an answer is wrong. Without the guard there were 24 wrong answers, 19 of them written for another prompt.
+- **The strict word guard removes the false hits** (0 answers written for another prompt, as many correct answers as calling the provider directly outside the outage) for a small loss of hits (65 against 69) and of savings (-46% against -50%). But this workload flatters it: its rewordings are only polite prefixes and suffixes, which the strict guard ignores. On genuinely reworded prompts (the 99 labeled pairs) it blocks about 90% of the true paraphrases (recall 22% against 86%). So it is a choice between safety and savings, off by default and one line in `config/cache.yaml` to turn on.
+- The quoted text rule of the guard was added after the runs of the default and the guard off modes, and would not change the 9 false hits above (the keys are not quoted).
+- This is one run per mode against a live provider, so a difference of a few requests can be model variation. The workload is synthetic and its share of repeated and reworded prompts is a choice of this benchmark, not a measurement of real traffic. The outage is simulated. The fallback model's price is a placeholder.
+
+## Security notes
+
+- Gateway API keys and dashboard passwords are stored as hashes (SHA 256 for keys, bcrypt for passwords). A new key is shown once.
+- A revoked key can keep working for up to 10 seconds (the gateway remembers key checks for that long). If PostgreSQL is down, a recently seen key keeps working and an unknown key gets 503: nothing is let in by default.
+- The web API needs `JWT_SECRET` (32+ characters), limits login attempts, answers wrong email and wrong password the same way, and only allows the dashboard origin. The dashboard keeps its token in `sessionStorage`. Hiding buttons from viewers is cosmetic, the web API enforces the roles.
+- Everything listens on `127.0.0.1` only. There is no HTTPS: this is a local prototype, not a deployment.
+- The development database password in `docker-compose.yml` is for local use only.
+
+## Design decisions
+
+- **A wrong cached answer is worse than a miss.** The guard is strict and the threshold sits above the lowest safe value on purpose. The benchmark showed where this is still not enough (see above).
+- **Measure before claiming.** Every number in this file comes from a script in the repository. When a measurement was worse than expected (the router that did not generalize, the cache that cost quality outside the outage), the result was kept and the design changed.
+- **The cache and tracing never break a request.** Errors are caught, logged and the request continues.
+- **The rate limiter fails open.** If Redis is down, requests pass and a warning is logged.
+- **A prompt version is never edited.** A change is a new version, otherwise past A/B numbers would stop meaning anything.
+- **Cost uses `Decimal` and the model that actually answered.** On a cache hit the trace records zero tokens and cost for the request, and `saved_tokens` and `saved_cost_usd` for what the cache avoided.
+- **Use `127.0.0.1`, not `localhost`, for services.** On Windows `localhost` can try IPv6 first and add a one second delay. Tests enforce this.
+- **Database changes go through Alembic.** A test fails if the models and the migrations disagree.
 
 ## Tests
 
@@ -259,20 +246,18 @@ cd ..\dashboard ; npm test     # dashboard formatting tests
 
 - **Estimated cost is not real spend.** Actual spend is $0 (free tiers and a local model). Cost is calculated from published list prices in `ai-gateway/config/pricing.yaml`. The local model rate is a notional placeholder. Some third party sites list different prices for the same model, so verify before relying on them.
 - Free tier limits and models change without notice. No limits are hardcoded.
-- A/B numbers cover latency, tokens, cost, errors and cache hits. Answer quality is not measured yet.
-- The cache is in memory: a restart empties it. Two identical requests at the same moment both miss and both store.
-- The guard, the refusal filter and the routing keywords are English only and heuristic. Known blind spots: names written in lowercase everywhere, aliases ("US" against "United States" is blocked, a lost hit), short lists of polarity and style words.
-- The cache threshold was tuned on 99 hand labeled pairs written by one person, and the guard was developed on the same pairs. The routing rules have not been evaluated.
+- The cache is in memory: a restart empties it. Two identical requests at the same moment both miss and both store. It cannot tell that a cached answer was wrong, so it repeats the model's mistakes.
+- The guard, the refusal filter, the routing keywords and the router's cue words are English only and heuristic. Known blind spots: prompts that differ only by lowercase words (the default guard), names written in lowercase everywhere, aliases ("US" against "United States" is blocked, a lost hit).
+- The cache threshold was tuned on 99 hand labeled pairs written by one person, and the guard was developed on the same pairs.
+- The eval set is small and written by one person, so only large changes are detected. The deterministic checks cannot judge nuance. The seeded bad changes were designed by me. Eval runs use free tier models, so answers vary a little between runs.
+- The learned router decides only for prompts that look like its training prompts, and those were generated from templates.
+- A/B numbers cover latency, tokens, cost, errors and cache hits. Answer quality is only measured by the evaluation harness, not per prompt version in the dashboard.
 - The rate limiter uses a fixed window (a client can send up to twice the limit around a minute boundary).
 - Traces can be lost if the server stops right after a request or the database is down. Requests rejected by auth (401), validation (422) or the gateway rate limit are not traced.
 - The gateway does not run in Docker yet (it needs Ollama and the embedding model). No streaming.
 - The web API and the dashboard have no HTTPS and are meant for a local machine.
-- The eval set is small (60 cases, about 40 per seeded comparison) and was written by one person, so only large changes are detected. The hand labels for the judge come from one person and 50 answers: the kappa interval is wide.
-- The deterministic checks cannot judge nuance, and open questions (summaries, explanations) are only covered by the judge. The seeded bad changes were designed by me.
-- Eval runs use free tier models: free tier limits change and answers vary a little between runs even at temperature 0.
-- The learned router decides only for prompts that look like its training prompts, and the training prompts are generated from templates. It adds a little latency (an embedding and a prediction per `smart` or `auto` request).
 
 ## Roadmap
 
-1. ML router and failure forensics
-2. RAG and Text to SQL demos, a benchmark with real measurements, gateway in Docker, CI, demo video
+1. RAG and Text to SQL demos through the gateway, with deterministic checks
+2. The gateway in Docker, CI, a demo video
