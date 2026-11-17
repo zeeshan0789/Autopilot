@@ -61,7 +61,7 @@ def load_pairs(path) -> list[LabeledPair]:
     return pairs
 
 
-def score_pairs(pairs: list[LabeledPair], embedder) -> list[ScoredPair]:
+def score_pairs(pairs: list[LabeledPair], embedder, strict_words: bool = False) -> list[ScoredPair]:
     """Embedding similarity and the guard verdict for every pair.
 
     The embedder must return normalized vectors, so the dot product is the cosine
@@ -74,7 +74,7 @@ def score_pairs(pairs: list[LabeledPair], embedder) -> list[ScoredPair]:
         similarity = float(
             np.dot(vectors[p.new_prompt.strip()], vectors[p.cached_prompt.strip()])
         )
-        guard = check_guard(p.new_prompt.strip(), p.cached_prompt.strip())
+        guard = check_guard(p.new_prompt.strip(), p.cached_prompt.strip(), strict_words=strict_words)
         scored.append(ScoredPair(p, similarity, guard.ok, guard.reason))
     return scored
 

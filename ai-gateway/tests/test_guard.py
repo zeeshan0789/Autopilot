@@ -7,6 +7,8 @@ from app.cache.guard import (
     extract_negations,
     extract_numbers,
     is_time_sensitive,
+    content_words,
+    extract_quoted,
 )
 
 
@@ -270,3 +272,57 @@ def test_same_style_word_on_both_sides_passes():
     assert allowed(
         "Give me a brief summary of Hamlet.", "Can you give a brief summary of Hamlet?"
     )
+
+def test_the_guard_can_be_switched_off_for_a_measurement():
+    new, cached = "What was Apple revenue in 2025?", "What was Apple revenue in 2024?"
+    assert not decide_hit(0.95, new, cached, 0.9).hit  # by default the changed year is blocked
+    assert decide_hit(0.95, new, cached, 0.9, use_guard=False).hit
+    assert not decide_hit(0.5, new, cached, 0.9, use_guard=False).hit  # the threshold still applies
+
+# ---------- Quoted text and strict words ----------
+
+
+def test_extract_quoted_finds_quotes_but_not_apostrophes():
+    assert extract_quoted("He said 'hello there' twice") == ["hello there"]
+    assert extract_quoted('Say "Hi" and \u2018Bye\u2019') == ["hi", "bye"]
+    assert extract_quoted("I don't know, it's what you can't see") == []
+
+
+def test_a_different_quoted_word_is_blocked():
+    assert blocked(
+        "Reverse the letters of the word 'planet'. Reply with only the reversed word.",
+        "Reverse the letters of the word 'garden'. Reply with only the reversed word.",
+        "quoted_mismatch",
+    )
+
+
+def test_the_same_quoted_text_passes_whatever_the_case_or_spacing():
+    assert allowed("Reverse the word 'Planet'.", "reverse the word ' planet '.")
+
+
+def test_the_default_guard_cannot_see_a_swapped_lowercase_word_but_strict_mode_can():
+    new, cached = "List exactly 3 fruits as a bulleted list.", "List exactly 3 colors as a bulleted list."
+    assert check_guard(new, cached).ok  # a known limit of the default guard
+    result = check_guard(new, cached, strict_words=True)
+    assert not result.ok and result.reason == "content_mismatch"
+
+
+def test_strict_mode_ignores_polite_filler_and_prefixes():
+    base = "What is the capital of France?"
+    assert check_guard("Please answer this: " + base, base, strict_words=True).ok
+    assert check_guard(base + " Thanks!", base, strict_words=True).ok
+    assert check_guard("Hi! " + base, base, strict_words=True).ok
+
+
+def test_strict_mode_also_blocks_a_real_paraphrase():
+    assert not check_guard("Which city is the capital of France?", "What is the capital of France?", strict_words=True).ok
+
+
+def test_content_words_drop_the_filler_and_possessives():
+    assert content_words("What is the capital of France's neighbour?") == {"capital", "france", "neighbour"}
+
+
+def test_decide_hit_passes_strict_mode_on():
+    new, cached = "List exactly 3 fruits.", "List exactly 3 colors."
+    assert decide_hit(0.95, new, cached, 0.9).hit
+    assert decide_hit(0.95, new, cached, 0.9, strict_words=True).reason == "content_mismatch"

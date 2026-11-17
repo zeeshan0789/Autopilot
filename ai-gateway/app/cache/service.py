@@ -70,6 +70,10 @@ class CacheSettings:
     max_prompt_chars: int = 800
     # Higher temperature means the caller wants varied answers, so skip the cache.
     max_temperature: float = 0.7
+    # False only for measurements (the benchmark): the cache then relies on similarity alone
+    guard_enabled: bool = True
+    # Strict guard: every changed content word blocks a hit (fewer wrong hits, fewer real hits too)
+    strict_words: bool = False
 
     def __post_init__(self):
         if not 0.0 < self.similarity_threshold <= 1.0:
@@ -204,6 +208,8 @@ class CacheService:
                 text,
                 candidate.entry.prompt_text,
                 self.settings.similarity_threshold,
+                use_guard=self.settings.guard_enabled,
+                strict_words=self.settings.strict_words,
             )
             if decision.hit:
                 return CacheLookup(

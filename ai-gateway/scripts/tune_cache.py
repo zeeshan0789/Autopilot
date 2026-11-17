@@ -59,13 +59,14 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--pairs", default=str(BASE_DIR / "benchmarks" / "cache_pairs.jsonl"))
     parser.add_argument("--margin", type=float, default=0.02, help="safety margin added to the lowest safe threshold")
+    parser.add_argument("--strict-words", action="store_true", help="measure the strict word guard")
     args = parser.parse_args()
 
     pairs = load_pairs(args.pairs)
     reusable = sum(1 for p in pairs if p.reusable)
     print(f"{len(pairs)} labeled pairs: {reusable} reusable, {len(pairs) - reusable} not reusable")
     print("Embedding the prompts (the first run loads the model)...")
-    scored = score_pairs(pairs, Embedder())
+    scored = score_pairs(pairs, Embedder(), strict_words=args.strict_words)
     current = CacheSettings(**load_cache_config()).similarity_threshold
 
     print()

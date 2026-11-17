@@ -148,6 +148,37 @@ _STYLE_WORDS = {
 def extract_style_words(text: str) -> set[str]:
     return {w for w in _words(text) if w in _STYLE_WORDS}
 
+# ---------- Quoted text and content words ----------
+
+_QUOTED_RE = re.compile(
+    r"""(?<!\w)'([^'\n]{1,80})'(?!\w)|"([^"\n]{1,80})"|\u2018([^\u2019\n]{1,80})\u2019|\u201c([^\u201d\n]{1,80})\u201d"""
+)
+
+
+def extract_quoted(text: str) -> list[str]:
+    """Text inside quotes, in order. It is usually the subject of the task ('planet' against 'garden')."""
+    spans = []
+    for match in _QUOTED_RE.finditer(text):
+        span = next(group for group in match.groups() if group is not None)
+        spans.append(" ".join(span.lower().split()))
+    return spans
+
+
+# Words that carry no task information. Everything else is a content word.
+_FILLER = {
+    "please", "thanks", "thank", "kindly", "hi", "hey", "you", "your", "i", "my", "me", "us", "we",
+    "could", "would", "can", "will", "shall", "tell", "answer", "this", "that", "these", "those",
+    "the", "a", "an", "is", "are", "was", "were", "be", "been", "am", "do", "does", "did",
+    "what", "which", "who", "whom", "whose", "when", "where", "why", "how",
+    "of", "in", "on", "at", "to", "for", "from", "with", "by", "about", "into",
+    "and", "or", "but", "if", "then", "so", "as", "it", "its", "there", "here",
+    "some", "any", "also", "just", "now", "very", "really", "need", "want", "like", "let", "know",
+}
+
+
+def content_words(text: str) -> set[str]:
+    return {word for word in _words(text) if word not in _FILLER}
+
 
 # ---------- The guard and the final decision ----------
 
@@ -157,8 +188,7 @@ class GuardResult:
     ok: bool
     reason: str  # "ok", "number_mismatch", "entity_mismatch", "negation_mismatch"
 
-
-def check_guard(new_text: str, cached_text: str) -> GuardResult:
+def check_guard(new_text: str, cached_text: str, strict_words: bool = False) -> GuardResult:
     if extract_numbers(new_text) != extract_numbers(cached_text):
         return GuardResult(False, "number_mismatch")
 
@@ -173,7 +203,14 @@ def check_guard(new_text: str, cached_text: str) -> GuardResult:
         return GuardResult(False, "negation_mismatch")
     if extract_style_words(new_text) != extract_style_words(cached_text):
         return GuardResult(False, "style_mismatch")
+    if extract_quoted(new_text) != extract_quoted(cached_text):
+        return GuardResult(False, "quoted_mismatch")
+    # Strict mode: any other changed word blocks the hit. It catches a swapped lowercase noun
+    # ("fruits" against "colors") but it also blocks real paraphrases.
+    if strict_words and content_words(new_text) != content_words(cached_text):
+        return GuardResult(False, "content_mismatch")
     return GuardResult(True, "ok")
+
 
 
 @dataclass(frozen=True)
@@ -185,15 +222,17 @@ class CacheDecision:
 
 
 def decide_hit(
-    similarity: float, new_text: str, cached_text: str, threshold: float
+    similarity: float,
+    new_text: str,
+    cached_text: str,
+    threshold: float,
+    use_guard: bool = True,
+    strict_words: bool = False,
 ) -> CacheDecision:
-    """A cache hit needs enough similarity AND a passing guard.
-
-    There is no default threshold on purpose: it must be tuned on a labeled sample.
-    """
     if similarity < threshold:
         return CacheDecision(False, "below_threshold", similarity)
-    guard = check_guard(new_text, cached_text)
-    if not guard.ok:
-        return CacheDecision(False, guard.reason, similarity)
+    if use_guard:
+        guard = check_guard(new_text, cached_text, strict_words=strict_words)
+        if not guard.ok:
+            return CacheDecision(False, guard.reason, similarity)
     return CacheDecision(True, "hit", similarity)
