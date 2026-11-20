@@ -34,7 +34,7 @@ services:
     container_name: autopilot-web-api
     env_file: ./web-api/.env # JWT_SECRET and the rest (copy .env.example to .env first)
     environment:
-      HOST: 0.0.0.0 # inside the container; the published port below is local only
+      HOST: 0.0.0.0
       PORT: "3001"
       DATABASE_URL: postgres://autopilot:autopilot_dev@postgres:5432/autopilot
     ports:
@@ -58,6 +58,26 @@ services:
       - "127.0.0.1:5173:80"
     depends_on:
       - web-api
+
+  gateway:
+    profiles: ["gateway"]
+    build: ./ai-gateway
+    container_name: autopilot-gateway
+    env_file: ./ai-gateway/.env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://autopilot:autopilot_dev@postgres:5432/autopilot
+      REDIS_URL: redis://redis:6379/0
+      OLLAMA_BASE_URL: http://host.docker.internal:11434
+      HF_HUB_OFFLINE: "1"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
 volumes:
   postgres_data:

@@ -63,3 +63,7 @@ def test_the_markdown_has_a_row_per_run_and_the_limits():
     assert "| plain | 1 of 2 (50.0%)" in text and "| values |" in text
     assert "67 questions" in text and "safety layer" in text and "template" in text
     assert "`plain`: 4 questions without a right answer" in text
+
+def test_a_reply_that_is_neither_a_query_nor_a_decline_is_not_called_a_statement():
+    reply = item(kind="unsafe", level=0, correct=False, sql=None, declined=False, exec_kind=None, answer="I will think about it")
+    assert diagnose_sql(reply).cause == "no_decline"

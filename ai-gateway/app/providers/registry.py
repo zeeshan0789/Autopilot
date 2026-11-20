@@ -1,3 +1,5 @@
+import os
+
 from app.providers.base import BaseProvider
 from app.providers.mock import MockProvider
 from app.providers.ollama import OllamaProvider
@@ -19,7 +21,7 @@ def build_provider(cfg: dict) -> BaseProvider:
     if provider_type == "ollama":
         return OllamaProvider(
             name=cfg["name"],
-            base_url=cfg["base_url"],
+            base_url=os.environ.get("OLLAMA_BASE_URL", cfg["base_url"]),
             timeout=cfg.get("timeout", 120),
         )
 
