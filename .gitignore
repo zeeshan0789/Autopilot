@@ -9,3 +9,4 @@ node_modules/
 data/
 benchmarks/runs/
 benchmarks/judge_cache.jsonl
+benchmarks/sql/shop.db

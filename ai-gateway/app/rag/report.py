@@ -39,7 +39,7 @@ def markdown_section(summaries: dict, retrieval: dict | None, failures: dict | N
     for mode in modes:
         s = summaries[mode]
         by = s["by_kind"]
-        cell = lambda kind: "n/a" if not by[kind]["n"] else f"{by[kind]['passed']} of {by[kind]['valid']} ({pct(by[kind]['rate'])})"
+        cell = lambda kind: "n/a" if (not by[kind]["n"] or (mode == "closed_book" and kind == "injection")) else f"{by[kind]['passed']} of {by[kind]['valid']} ({pct(by[kind]['rate'])})"
         tokens = "n/a" if s["avg_tokens"] is None else f"{s['avg_tokens']:.0f}"
         cost = "n/a" if s["avg_cost_usd"] is None else f"${s['avg_cost_usd']:.6f}"
         lines.append(f"| {MODE_LABELS[mode]} | {cell('answerable')} | {cell('unanswerable')} | {cell('injection')} | {tokens} | {cost} |")
