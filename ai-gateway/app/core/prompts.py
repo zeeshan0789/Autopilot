@@ -3,6 +3,7 @@
 A request can name a prompt in its "autopilot" field. The gateway picks one version of
 that prompt (a weighted random choice, or a stable choice per "user" so a person always
 sees the same variant), fills in the template and puts the result in front of the messages.
+A prompt belongs to the user who created it: a request only ever finds the prompts of the owner of its key.
 """
 
 import hashlib
@@ -123,31 +124,38 @@ def render_messages(
 
 
 class PromptStore:
-    """Reads prompts from Postgres and remembers them for a few seconds."""
+    """Reads prompts from Postgres and remembers them for a few seconds. A prompt belongs to the user who
+    created it: a user only ever sees their own prompts, even when another user has a prompt with the same name."""
+
+    MAX_REMEMBERED = 1000
 
     def __init__(self, ttl_seconds: float = CACHE_TTL_SECONDS, clock=time.monotonic):
         self.ttl_seconds = ttl_seconds
         self._clock = clock
-        self._cache: dict[str, tuple[float, list[PromptVersionData] | None]] = {}
+        self._cache: dict = {}
 
-    async def get_versions(self, name: str) -> list[PromptVersionData] | None:
-        """The versions of a prompt, or None when the prompt does not exist."""
+    async def get_versions(self, name: str, user_id: int | None = None) -> list[PromptVersionData] | None:
+        """The versions of a prompt of this owner, or None when the owner has no prompt with this name."""
         now = self._clock()
-        cached = self._cache.get(name)
+        key = (user_id, name)
+        cached = self._cache.get(key)
         if cached and now - cached[0] < self.ttl_seconds:
             return cached[1]
         try:
-            versions = await self._load(name)
+            versions = await self._load(name, user_id)
         except Exception as e:
             if cached:
                 logger.warning("Prompt store unavailable (%s), using the last known '%s'", e, name)
                 return cached[1]
             logger.warning("Prompt store unavailable (%s)", e)
             raise PromptError(503, "the prompt store is unavailable") from e
-        self._cache[name] = (now, versions)
+        if len(self._cache) >= self.MAX_REMEMBERED:
+            self._cache.clear()  # bounded memory, even when someone asks for thousands of names
+        self._cache[key] = (now, versions)
         return versions
 
-    async def _load(self, name: str) -> list[PromptVersionData] | None:
+    async def _load(self, name: str, user_id: int | None = None) -> list[PromptVersionData] | None:
+        owner = Prompt.user_id.is_(None) if user_id is None else Prompt.user_id == user_id
         async with db_session.SessionLocal() as session:
             rows = (
                 await session.execute(
@@ -160,7 +168,7 @@ class PromptStore:
                     )
                     .select_from(Prompt)
                     .join(PromptVersion, PromptVersion.prompt_id == Prompt.id, isouter=True)
-                    .where(Prompt.name == name)
+                    .where(Prompt.name == name, owner)
                     .order_by(PromptVersion.version)
                 )
             ).all()
@@ -172,10 +180,10 @@ class PromptStore:
             if r.version is not None
         ]
 
-    async def resolve(self, request: ChatCompletionRequest) -> SelectedPrompt:
+    async def resolve(self, request: ChatCompletionRequest, user_id: int | None = None) -> SelectedPrompt:
         options = request.autopilot
         name = options.prompt
-        versions = await self.get_versions(name)
+        versions = await self.get_versions(name, user_id)
         if versions is None:
             raise PromptError(404, f"prompt '{name}' not found")
         chosen = choose_version(name, versions, options.version, request.user)

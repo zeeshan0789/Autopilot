@@ -8,6 +8,7 @@ from redis.exceptions import RedisError
 
 from app.core.auth import ApiKeyInfo, require_api_key
 from app.settings import REDIS_URL
+from app.core.quota import quota_limiter
 
 logger = logging.getLogger("autopilot.rate_limit")
 
@@ -76,4 +77,19 @@ async def enforce_rate_limit(
 
     for name, value in headers.items():
         response.headers[name] = value
+    # The daily quota of the owner (keys without an owner have none)
+    if api_key.user_id is not None and api_key.daily_request_limit:
+        quota = await quota_limiter.consume(api_key.user_id, api_key.daily_request_limit)
+        response.headers["X-Quota-Limit"] = str(quota.limit)
+        response.headers["X-Quota-Remaining"] = str(quota.remaining)
+        if not quota.allowed:
+            raise HTTPException(
+                status_code=429,
+                detail="daily request limit reached",
+                headers={
+                    "X-Quota-Limit": str(quota.limit),
+                    "X-Quota-Remaining": "0",
+                    "Retry-After": str(quota.retry_after),
+                },
+            )
     return api_key

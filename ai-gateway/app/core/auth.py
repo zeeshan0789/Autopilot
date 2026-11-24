@@ -11,7 +11,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 
 from app.db import session as db_session
-from app.db.models import ApiKey
+from app.db.models import ApiKey, User
 from app.settings import BASE_DIR
 
 logger = logging.getLogger("autopilot.auth")
@@ -30,6 +30,9 @@ class ApiKeyInfo:
     key_id: str  # first 8 characters of the hash, used in traces and cache namespaces
     name: str
     rate_limit_per_min: int
+    user_id: int | None = None  # the owner, None for keys that have no owner
+    daily_request_limit: int | None = None  # None: no daily quota
+    max_tokens_cap: int | None = None  # None: no cap
 
 
 class AuthUnavailable(Exception):
@@ -126,14 +129,26 @@ class DbKeyStore:
     async def _load(self, key_hash: str) -> ApiKeyInfo | None:
         async with db_session.SessionLocal() as session:
             row = (
-                await session.execute(select(ApiKey).where(ApiKey.key_hash == key_hash))
-            ).scalar_one_or_none()
-        if row is None or not row.active:
+                await session.execute(
+                    select(ApiKey, User)
+                    .outerjoin(User, ApiKey.user_id == User.id)
+                    .where(ApiKey.key_hash == key_hash)
+                )
+            ).first()
+        if row is None:
             return None
+        key, user = row
+        if not key.active:
+            return None
+        if user is not None and user.status != "active":
+            return None  # the keys of a suspended user stop working
         return ApiKeyInfo(
-            key_id=row.key_id,
-            name=row.name,
-            rate_limit_per_min=row.rate_limit_per_min,
+            key_id=key.key_id,
+            name=key.name,
+            rate_limit_per_min=key.rate_limit_per_min,
+            user_id=key.user_id,
+            daily_request_limit=None if user is None else user.daily_request_limit,
+            max_tokens_cap=None if user is None else user.max_tokens_cap,
         )
 
 

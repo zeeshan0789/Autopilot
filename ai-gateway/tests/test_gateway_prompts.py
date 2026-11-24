@@ -17,12 +17,12 @@ class FakeStore(PromptStore):
         super().__init__()
         self.data = data
 
-    async def _load(self, name):
+    async def _load(self, name, user_id=None):
         return self.data.get(name)
 
 
 class DownStore(PromptStore):
-    async def _load(self, name):
+    async def _load(self, name, user_id=None):
         raise OSError("database is down")
 
 

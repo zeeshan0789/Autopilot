@@ -3,7 +3,7 @@ from datetime import datetime
 from decimal import Decimal
 
 from sqlalchemy import (
-    Boolean, DateTime, Float, ForeignKey, Integer, Numeric, String, Text,
+    Boolean, DateTime, Float, ForeignKey, Index, Integer, Numeric, String, Text,
     UniqueConstraint, func, text,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
@@ -69,14 +69,23 @@ class Trace(Base):
     ml_status: Mapped[str | None] = mapped_column(String(16), index=True)
     ml_prob: Mapped[float | None] = mapped_column(Float)
     ml_similarity: Mapped[float | None] = mapped_column(Float)
+    # Whose request it was (NULL for requests made with a key that has no owner)
+    user_id: Mapped[int | None] = mapped_column(Integer, index=True)
 
 class Prompt(Base):
-    """A named prompt that clients can ask for. Its versions are in prompt_versions."""
+    """A named prompt that clients can ask for. Its versions are in prompt_versions. A prompt belongs
+    to the user who created it, and its name is unique per owner."""
 
     __tablename__ = "prompts"
+    __table_args__ = (
+        UniqueConstraint("user_id", "name", name="prompts_user_id_name_key"),
+        # Prompts without an owner (created before accounts existed) still need unique names
+        Index("uq_prompts_legacy_name", "name", unique=True, postgresql_where=text("user_id IS NULL")),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    name: Mapped[str] = mapped_column(String(64), unique=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(64))
     description: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
@@ -119,17 +128,38 @@ class ApiKey(Base):
         DateTime(timezone=True), server_default=func.now()
     )
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # The user who owns the key. NULL for keys that were created before accounts existed.
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
 
 
 class User(Base):
-    """A dashboard user. The Node.js web backend reads and writes this table."""
+    """A person with an account. role: admin (runs the platform) or member (a normal user with an own workspace)."""
 
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     email: Mapped[str] = mapped_column(String(255), unique=True)
     password_hash: Mapped[str] = mapped_column(String(100))
-    role: Mapped[str] = mapped_column(String(16), server_default=text("'admin'"))
+    role: Mapped[str] = mapped_column(String(16), server_default=text("'member'"))
+    status: Mapped[str] = mapped_column(String(16), server_default=text("'active'"))  # active or suspended
+    daily_request_limit: Mapped[int] = mapped_column(Integer, server_default=text("200"))
+    max_tokens_cap: Mapped[int] = mapped_column(Integer, server_default=text("1024"))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
+
+class Invite(Base):
+    """A single use code that lets one person sign up while the signup mode is 'invite'.
+    Only the hash of the code is stored."""
+
+    __tablename__ = "invites"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    code_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    note: Mapped[str | None] = mapped_column(String(200))
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    used_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

@@ -1,29 +1,36 @@
 """Create a gateway API key. Only its hash is stored in Postgres.
 
-Usage (from ai-gateway/):  python -m scripts.create_key <name> [rate_limit_per_min]
+Usage (from ai-gateway/):
+    python -m scripts.create_key <name> [rate_limit_per_min] [--user someone@example.com]
+Without --user the key has no owner (no daily quota). With --user it belongs to that account.
 """
 
+import argparse
 import asyncio
 import secrets
-import sys
+
+from sqlalchemy import select
 
 from app.core.auth import hash_key
-from app.db.models import ApiKey
+from app.db.models import ApiKey, User
 from app.db.session import SessionLocal, engine
 
 
-async def create(name: str, limit: int) -> str:
+async def create(name: str, limit: int, user_email: str | None) -> str:
     key = "ap-" + secrets.token_urlsafe(32)
     key_hash = hash_key(key)
     try:
         async with SessionLocal() as session:
+            owner_id = None
+            if user_email:
+                owner = (
+                    await session.execute(select(User).where(User.email == user_email.strip().lower()))
+                ).scalar_one_or_none()
+                if owner is None:
+                    raise SystemExit(f"no user with the email {user_email}")
+                owner_id = owner.id
             session.add(
-                ApiKey(
-                    key_hash=key_hash,
-                    key_id=key_hash[:8],
-                    name=name,
-                    rate_limit_per_min=limit,
-                )
+                ApiKey(key_hash=key_hash, key_id=key_hash[:8], name=name, rate_limit_per_min=limit, user_id=owner_id)
             )
             await session.commit()
     finally:
@@ -32,16 +39,16 @@ async def create(name: str, limit: int) -> str:
 
 
 def main() -> None:
-    if len(sys.argv) < 2:
-        print("Usage: python -m scripts.create_key <name> [rate_limit_per_min]")
-        sys.exit(1)
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("name")
+    parser.add_argument("limit", nargs="?", type=int, default=60)
+    parser.add_argument("--user", help="email of the account that owns the key")
+    args = parser.parse_args()
 
-    name = sys.argv[1]
-    limit = int(sys.argv[2]) if len(sys.argv) > 2 else 60
-    key = asyncio.run(create(name, limit))
-
+    key = asyncio.run(create(args.name, args.limit, args.user))
+    owner = f", owner {args.user}" if args.user else ", no owner"
     print()
-    print(f"Key '{name}' created (limit: {limit} requests/minute)")
+    print(f"Key '{args.name}' created (limit: {args.limit} requests/minute{owner})")
     print()
     print(f"    {key}")
     print()

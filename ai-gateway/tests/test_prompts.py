@@ -129,7 +129,7 @@ class FakeStore(PromptStore):
         self.loads = 0
         self.fail = False
 
-    async def _load(self, name):
+    async def _load(self, name, user_id=None):
         self.loads += 1
         if self.fail:
             raise OSError("database is down")

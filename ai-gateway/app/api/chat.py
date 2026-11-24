@@ -1,6 +1,8 @@
+
 import asyncio
 import logging
 import time
+from urllib import request
 import uuid
 from dataclasses import asdict
 from decimal import Decimal
@@ -81,19 +83,29 @@ async def chat_completions(
         request_id=request_id,
         requested_model=request.model,
         api_key_id=api_key.key_id,
+        user_id=api_key.user_id,
     )
+
 
     try:
         if request.stream:
             raise HTTPException(
-                status_code=400, detail="stream=true is not supported yet"
+                status_code=400,
+                detail="stream=true is not supported yet"
             )
+
+        if api_key.max_tokens_cap and request.max_tokens and request.max_tokens > api_key.max_tokens_cap:
+            raise HTTPException(
+                status_code=400,
+                detail=f"max_tokens is above the limit of this account ({api_key.max_tokens_cap})",
+            )
+
 
         # A request can ask for a managed prompt (versioned, with an A/B traffic split)
         cache_namespace = api_key.key_id
         if request.autopilot and request.autopilot.prompt:
             try:
-                selected = await prompt_store.resolve(request)
+                selected = await prompt_store.resolve(request, api_key.user_id)
             except PromptError as e:
                 raise HTTPException(status_code=e.status_code, detail=str(e))
             trace.prompt_name = selected.name

@@ -47,6 +47,7 @@ class TraceData:
     ml_status: str | None = None
     ml_prob: float | None = None
     ml_similarity: float | None = None
+    user_id: int | None = None  # the owner of the key
 
 
 async def record_trace(data: TraceData) -> None:
