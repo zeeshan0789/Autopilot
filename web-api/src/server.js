@@ -6,11 +6,11 @@ import { createRateLimiter } from "./rateLimit.js";
 const config = loadConfig();
 const db = createDb(config.databaseUrl);
 const loginLimiter = createRateLimiter({ windowMs: 60_000, max: 10 });
-const app = createApp({ db, config, loginLimiter });
+const signupLimiter = createRateLimiter({ windowMs: 3_600_000, max: 5 });
+const app = createApp({ db, config, loginLimiter, signupLimiter });
 
-// Local only: the dashboard talks to this server from the same machine
 const server = app.listen(config.port, config.host, () => {
-  console.log(`web-api listening on http://${config.host}:${config.port}`);
+  console.log(`web-api listening on http://${config.host}:${config.port} (signup: ${config.signupMode})`);
 });
 
 async function shutdown() {

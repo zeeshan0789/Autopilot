@@ -2,6 +2,7 @@ import { Router } from "express";
 import { parse, wrap } from "../http.js";
 import { tracesQuerySchema } from "../validation.js";
 
+// A user only sees the traces of their own requests
 export function tracesRoutes({ db }) {
   const router = Router();
 
@@ -9,11 +10,11 @@ export function tracesRoutes({ db }) {
     "/",
     wrap(async (req, res) => {
       const { limit, offset, status } = parse(tracesQuerySchema, req.query);
-      const params = [];
-      let where = "";
+      const params = [req.user.id];
+      let where = "where user_id = $1";
       if (status) {
         params.push(status);
-        where = `where status = $${params.length}`;
+        where += ` and status = $${params.length}`;
       }
       params.push(limit, offset);
       const { rows } = await db.query(

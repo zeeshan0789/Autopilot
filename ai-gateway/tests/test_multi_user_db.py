@@ -1,3 +1,4 @@
+
 import asyncio
 import uuid
 
@@ -36,7 +37,13 @@ def test_ownership_rules_with_a_real_database(monkeypatch):
                 bob = User(email=emails[1], password_hash="x", role="member")
                 session.add_all([alice, bob])
                 await session.flush()
-                session.add(ApiKey(key_hash=hash_key(key_text), key_id=hash_key(key_text)[:8], name="k", user_id=alice.id))
+                session.add(ApiKey(
+                    key_hash=hash_key(key_text),
+                    key_id=hash_key(key_text)[:8],
+                    name="k",
+                    user_id=alice.id,
+                    rate_limit_per_min=30
+                ))
                 for owner in (alice, bob):
                     prompt = Prompt(user_id=owner.id, name="qa")
                     session.add(prompt)
@@ -48,6 +55,7 @@ def test_ownership_rules_with_a_real_database(monkeypatch):
             # The key knows its owner and the limits of the owner
             info = await DbKeyStore()._load(hash_key(key_text))
             assert info.user_id == alice_id
+            assert info.rate_limit_per_min == 30  # the limit of the key itself, not the default
             assert (info.daily_request_limit, info.max_tokens_cap) == (200, 1024)
 
             # Each user only sees their own prompt, although both are called "qa"

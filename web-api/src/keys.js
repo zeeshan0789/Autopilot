@@ -13,3 +13,10 @@ export function hashApiKey(key) {
 export function keyIdOf(hash) {
   return hash.slice(0, 8);
 }
+
+// Invite codes are secrets too: only their hash is stored
+export function generateInviteCode() {
+  return "inv-" + randomBytes(18).toString("base64url");
+}
+
+export const hashInviteCode = hashApiKey;

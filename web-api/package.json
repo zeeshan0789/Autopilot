@@ -7,7 +7,9 @@
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
     "test": "vitest run",
-    "create-user": "node src/scripts/create-user.js"
+    "create-user": "node src/scripts/create-user.js",
+    "claim-legacy": "node src/scripts/claim-legacy.js",
+    "create-invite": "node src/scripts/create-invite.js"
   },
   "engines": { "node": ">=20" },
   "dependencies": {

@@ -1,4 +1,5 @@
 import asyncio
+from app.core.rate_limit import RateLimitResult
 
 import pytest
 from fastapi.testclient import TestClient
@@ -140,3 +141,41 @@ def test_the_prompt_cache_has_a_size_limit():
     for i in range(20):
         asyncio.run(store.get_versions(f"name{i}", 1))
     assert len(store._cache) <= 5
+
+class CountingLimiter:
+    """A per minute limiter that really counts (the shared fixture lets every request through)."""
+
+    def __init__(self):
+        self.counts = {}
+
+    async def check(self, key_id, limit):
+        self.counts[key_id] = self.counts.get(key_id, 0) + 1
+        count = self.counts[key_id]
+        return RateLimitResult(count <= limit, limit, max(0, limit - count), 30)
+
+
+THIRTY = ApiKeyInfo(key_id="dddddddd", name="thirty", rate_limit_per_min=30, user_id=3, daily_request_limit=200, max_tokens_cap=1024)
+TWO = ApiKeyInfo(key_id="eeeeeeee", name="two", rate_limit_per_min=2, user_id=3, daily_request_limit=200, max_tokens_cap=1024)
+
+
+def test_the_limit_of_the_key_and_the_quota_of_the_account_are_different_numbers(monkeypatch, quota):
+    monkeypatch.setattr("app.core.auth.key_store", FakeKeys({"ap-thirty": THIRTY}))
+    monkeypatch.setattr("app.core.rate_limit.limiter", CountingLimiter())
+    response = post("ap-thirty")
+    assert response.status_code == 200
+    # the limit per minute is the one set on the key
+    assert response.headers["x-ratelimit-limit"] == "30"
+    assert response.headers["x-ratelimit-remaining"] == "29"
+    # the daily quota is the one of the account, and it is consumed against that number
+    assert response.headers["x-quota-limit"] == "200"
+    assert quota.calls == [(3, 200)]
+
+
+def test_each_key_is_held_to_its_own_limit_per_minute(monkeypatch, quota):
+    monkeypatch.setattr("app.core.auth.key_store", FakeKeys({"ap-two": TWO, "ap-thirty": THIRTY}))
+    monkeypatch.setattr("app.core.rate_limit.limiter", CountingLimiter())
+    assert [post("ap-two").status_code for _ in range(3)] == [200, 200, 429]
+    # another key of the same account has its own count
+    assert post("ap-thirty").status_code == 200
+    # a request refused for the per minute limit does not use up the daily quota
+    assert len(quota.calls) == 3

@@ -12,6 +12,21 @@ export function createDb(databaseUrl = DEFAULT_DATABASE_URL) {
   });
   return {
     query: (text, params) => pool.query(text, params),
+    // Several statements that succeed or fail together
+    transaction: async (work) => {
+      const client = await pool.connect();
+      try {
+        await client.query("begin");
+        const result = await work({ query: (text, params) => client.query(text, params) });
+        await client.query("commit");
+        return result;
+      } catch (error) {
+        await client.query("rollback").catch(() => {});
+        throw error;
+      } finally {
+        client.release();
+      }
+    },
     close: () => pool.end(),
   };
 }

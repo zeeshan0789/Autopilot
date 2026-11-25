@@ -5,6 +5,7 @@ import { bucketSchema, dimensionSchema, hoursSchema } from "../validation.js";
 // Provider calls are the requests that were not answered from the cache
 const PROVIDER_CALL = "status = 'success' and cache_status is distinct from 'hit'";
 
+// The last parameter of every query is the user: a number limits the numbers to that user, null means everybody
 const OVERVIEW_SQL = `
 select
   count(*) as requests,
@@ -23,7 +24,8 @@ select
          filter (where ${PROVIDER_CALL}))::numeric) as p95_latency_ms,
   round(avg(latency_ms) filter (where cache_status = 'hit')) as avg_hit_latency_ms
 from traces
-where created_at >= now() - make_interval(hours => $1)`;
+where created_at >= now() - make_interval(hours => $1)
+  and ($2::int is null or user_id = $2)`;
 
 const TIMESERIES_SQL = `
 select date_trunc($2, created_at) as bucket,
@@ -34,6 +36,7 @@ select date_trunc($2, created_at) as bucket,
        coalesce(sum(saved_cost_usd), 0) as cost_saved_usd
 from traces
 where created_at >= now() - make_interval(hours => $1)
+  and ($3::int is null or user_id = $3)
 group by 1 order by 1`;
 
 const PROMPTS_SQL = `
@@ -47,6 +50,7 @@ select prompt_name, prompt_version,
        coalesce(sum(estimated_cost_usd), 0) as cost_spent_usd
 from traces
 where prompt_name is not null and created_at >= now() - make_interval(hours => $1)
+  and ($2::int is null or user_id = $2)
 group by prompt_name, prompt_version
 order by prompt_name, prompt_version`;
 
@@ -62,14 +66,16 @@ const DIMENSIONS = {
 const num = (value) => (value === null || value === undefined ? null : Number(value));
 const ratio = (part, whole) => (whole > 0 ? part / whole : null);
 
-export function statsRoutes({ db }) {
+// platform false: the numbers of the logged in user. platform true: everybody (mounted for admins only).
+export function statsRoutes({ db, platform = false }) {
   const router = Router();
+  const scope = (req) => (platform ? null : req.user.id);
 
   router.get(
     "/overview",
     wrap(async (req, res) => {
       const hours = parse(hoursSchema, req.query.hours);
-      const { rows } = await db.query(OVERVIEW_SQL, [hours]);
+      const { rows } = await db.query(OVERVIEW_SQL, [hours, scope(req)]);
       const r = rows[0];
       const requests = Number(r.requests);
       const errors = Number(r.errors);
@@ -108,7 +114,7 @@ export function statsRoutes({ db }) {
     wrap(async (req, res) => {
       const hours = parse(hoursSchema, req.query.hours);
       const bucket = parse(bucketSchema, req.query.bucket);
-      const { rows } = await db.query(TIMESERIES_SQL, [hours, bucket]);
+      const { rows } = await db.query(TIMESERIES_SQL, [hours, bucket, scope(req)]);
       res.json({
         hours,
         bucket,
@@ -132,9 +138,10 @@ export function statsRoutes({ db }) {
       const expression = DIMENSIONS[by];
       const { rows } = await db.query(
         `select ${expression} as name, count(*) as requests
-         from traces where created_at >= now() - make_interval(hours => $1)
+         from traces
+         where created_at >= now() - make_interval(hours => $1) and ($2::int is null or user_id = $2)
          group by 1 order by 2 desc`,
-        [hours],
+        [hours, scope(req)],
       );
       res.json({ hours, by, items: rows.map((r) => ({ name: r.name, requests: Number(r.requests) })) });
     }),
@@ -144,7 +151,7 @@ export function statsRoutes({ db }) {
     "/prompts",
     wrap(async (req, res) => {
       const hours = parse(hoursSchema, req.query.hours);
-      const { rows } = await db.query(PROMPTS_SQL, [hours]);
+      const { rows } = await db.query(PROMPTS_SQL, [hours, scope(req)]);
       res.json({
         hours,
         versions: rows.map((r) => ({
