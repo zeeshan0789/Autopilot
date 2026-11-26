@@ -57,7 +57,7 @@ def test_ownership_rules_with_a_real_database(monkeypatch):
             assert info.user_id == alice_id
             assert info.rate_limit_per_min == 30  # the limit of the key itself, not the default
             assert (info.daily_request_limit, info.max_tokens_cap) == (200, 1024)
-
+            assert info.is_admin is False
             # Each user only sees their own prompt, although both are called "qa"
             store = PromptStore()
             assert (await store._load("qa", alice_id))[0].system_prompt == f"owned by {alice_id}"

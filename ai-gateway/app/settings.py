@@ -57,3 +57,7 @@ ROUTER_CONFIG_PATH = BASE_DIR / "config" / "router.yaml"
 
 def load_router_config(path: Path | None = None) -> dict:
     return _load_yaml(path or ROUTER_CONFIG_PATH).get("router") or {}
+
+# All members together may send this many requests a day (0 switches it off). Administrators and keys
+# without an owner are not counted. It protects the free quota of the models behind the platform.
+PLATFORM_DAILY_LIMIT = int(os.environ.get("PLATFORM_DAILY_LIMIT", "2000"))

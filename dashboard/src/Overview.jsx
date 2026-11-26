@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import {
   Area,
   AreaChart,
@@ -13,8 +14,12 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { GATEWAY_URL } from "./api.js";
+import { useAuth } from "./auth.jsx";
 import { Card, ErrorBox, Loading, RangeSelect, Stat } from "./components.jsx";
+import { Snippet } from "./CopyButton.jsx";
 import { int, ms, pct, shortTime, usd } from "./format.js";
+import { powershellSnippet } from "./snippets.js";
 import TraceTable from "./TraceTable.jsx";
 import { useFetch } from "./useFetch.js";
 
@@ -36,15 +41,63 @@ function Chart({ children, height = 260 }) {
   );
 }
 
-export default function Overview() {
+function GetStarted() {
+  const { user } = useAuth();
+  const keys = useFetch("/api/keys");
+  const hasKey = (keys.data?.keys ?? []).some((key) => key.active);
+
+  return (
+    <Card title="Get started" subtitle="Three steps and your first request shows up on this page.">
+      <ol className="space-y-5 text-sm text-slate-700">
+        <li>
+          <div className="font-medium text-slate-900">1. Create an API key {hasKey && <span className="text-emerald-600">(you have one)</span>}</div>
+          <p className="mt-1 text-slate-600">
+            Keys are made on the{" "}
+            <Link to="/keys" className="text-indigo-600 hover:underline">
+              API keys page
+            </Link>
+            . A key is shown once, copy it somewhere safe.
+          </p>
+        </li>
+        <li>
+          <div className="font-medium text-slate-900">2. Send a request to the gateway</div>
+          <p className="mb-2 mt-1 text-slate-600">Replace ap-YOUR-KEY with your key. The model name auto lets the gateway choose a model.</p>
+          <Snippet text={powershellSnippet(GATEWAY_URL)} />
+        </li>
+        <li>
+          <div className="font-medium text-slate-900">3. Come back and refresh</div>
+          <p className="mt-1 text-slate-600">The request appears in the charts and in the latest requests below.</p>
+        </li>
+      </ol>
+      {user.role !== "admin" && (
+        <p className="mt-5 text-xs text-slate-500">
+          Your account can send {int(user.daily_request_limit)} requests a day (all keys together) and ask for answers of up to{" "}
+          {int(user.max_tokens_cap)} tokens.
+        </p>
+      )}
+    </Card>
+  );
+}
+
+function RecentRequests() {
+  const recent = useFetch("/api/traces", { limit: 8 });
+  return (
+    <Card title="Latest requests">
+      <ErrorBox error={recent.error} />
+      <TraceTable traces={recent.data?.traces ?? []} />
+    </Card>
+  );
+}
+
+// scope "mine": the numbers of the logged in user. scope "platform": everybody (the admin pages only).
+export default function Overview({ base = "/api/stats", title = "Overview", scope = "mine" }) {
   const [hours, setHours] = useState(24);
   const [by, setBy] = useState("route");
   const bucket = hours <= 48 ? "hour" : "day";
 
-  const overview = useFetch("/api/stats/overview", { hours });
-  const series = useFetch("/api/stats/timeseries", { hours, bucket });
-  const breakdown = useFetch("/api/stats/breakdown", { hours, by });
-  const recent = useFetch("/api/traces", { limit: 8 });
+  const overview = useFetch(`${base}/overview`, { hours });
+  const series = useFetch(`${base}/timeseries`, { hours, bucket });
+  const breakdown = useFetch(`${base}/breakdown`, { hours, by });
 
   const o = overview.data;
   const points = (series.data?.points ?? []).map((p) => ({ ...p, label: shortTime(p.bucket, bucket) }));
@@ -52,12 +105,14 @@ export default function Overview() {
   return (
     <>
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold text-slate-900">Overview</h1>
+        <h1 className="text-xl font-bold text-slate-900">{title}</h1>
         <RangeSelect hours={hours} onChange={setHours} />
       </div>
 
       <ErrorBox error={overview.error} />
       {overview.loading && !o && <Loading />}
+
+      {o && o.requests === 0 && scope === "mine" && <GetStarted />}
 
       {o && (
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
@@ -155,10 +210,7 @@ export default function Overview() {
         </Card>
       </div>
 
-      <Card title="Latest requests">
-        <ErrorBox error={recent.error} />
-        <TraceTable traces={recent.data?.traces ?? []} />
-      </Card>
+      {scope === "mine" && <RecentRequests />}
     </>
   );
 }

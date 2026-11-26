@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { api } from "./api.js";
-import { useAuth } from "./auth.jsx";
 import { Badge, Button, Card, ErrorBox, Loading, RangeSelect, inputClass } from "./components.jsx";
 import { int, ms, pct, usd } from "./format.js";
 import { useFetch } from "./useFetch.js";
@@ -211,7 +210,7 @@ function PromptCard({ prompt, isAdmin, onChanged }) {
 }
 
 export default function Prompts() {
-  const { isAdmin } = useAuth();
+  const isAdmin = true; // every user manages the prompts of their own account
   const [hours, setHours] = useState(24);
   const prompts = useFetch("/api/prompts");
   const stats = useFetch("/api/stats/prompts", { hours });

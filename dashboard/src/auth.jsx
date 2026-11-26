@@ -22,15 +22,38 @@ export function AuthProvider({ children }) {
       .finally(() => setLoading(false));
   }, [logout]);
 
-  const login = useCallback(async (email, password) => {
-    const result = await api("/api/auth/login", { method: "POST", body: { email, password } });
-    setToken(result.token);
-    setUser(result.user);
+  // The account (with its role and limits) always comes from the server, never from the token
+  const startSession = useCallback(async (token) => {
+    setToken(token);
+    try {
+      setUser(await api("/api/me"));
+    } catch (error) {
+      setToken(null);
+      throw error;
+    }
   }, []);
 
+  const login = useCallback(
+    async (email, password) => {
+      const result = await api("/api/auth/login", { method: "POST", body: { email, password } });
+      await startSession(result.token);
+    },
+    [startSession],
+  );
+
+  const signup = useCallback(
+    async (email, password, inviteCode) => {
+      const body = { email, password };
+      if (inviteCode) body.invite_code = inviteCode;
+      const result = await api("/api/auth/signup", { method: "POST", body });
+      await startSession(result.token);
+    },
+    [startSession],
+  );
+
   const value = useMemo(
-    () => ({ user, loading, login, logout, isAdmin: user?.role === "admin" }),
-    [user, loading, login, logout],
+    () => ({ user, loading, login, signup, logout, isAdmin: user?.role === "admin" }),
+    [user, loading, login, signup, logout],
   );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

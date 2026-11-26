@@ -2,7 +2,7 @@ import request from "supertest";
 import { describe, expect, it } from "vitest";
 import { hashPassword } from "../src/auth.js";
 import { hashApiKey, hashInviteCode } from "../src/keys.js";
-import { ADMIN, ALICE, BOB, auth, callsMatching, makeApp } from "./helpers.js";
+import { ADMIN, ALICE, BOB, auth, callsMatching, config, makeApp } from "./helpers.js";
 
 const row = (id, role = "member", status = "active") => ({ id, email: `u${id}@example.com`, role, status });
 const uniqueViolation = Object.assign(new Error("duplicate"), { code: "23505" });
@@ -62,17 +62,51 @@ describe("signup", () => {
     expect(res.body.user).toEqual({ id: 9, email: "new@example.com", role: "member" });
     expect(res.body.token).toBeTruthy();
 
-    expect(db.calls.map((c) => c.text.replace(/\s+/g, " ").slice(0, 28))).toEqual([
-      "update invites set used_at =",
-      "insert into users (email, pa",
-      "update invites set used_by =",
-    ]);
-    expect(db.calls[0].params).toEqual([hashInviteCode("inv-abc")]);
-    expect(db.calls[1].text).toContain("'member'");
-    expect(db.calls[1].params[0]).toBe("new@example.com");
-    expect(db.calls[1].params[1]).not.toBe("a-long-password"); // only a hash is stored
-    expect(db.calls[2].params).toEqual([9, 5]);
+    const order = db.calls.map((c) =>
+      /select count/.test(c.text) ? "count"
+        : /update invites set used_at/.test(c.text) ? "claim"
+        : /insert into users/.test(c.text) ? "insert"
+        : /update invites set used_by/.test(c.text) ? "link"
+        : "other",
+    );
+    expect(order).toEqual(["count", "claim", "insert", "link"]);
+
+    const [insert] = callsMatching(db, /insert into users/);
+    expect(insert.text).toContain("'member'");
+    expect(insert.params[0]).toBe("new@example.com");
+    expect(insert.params[1]).not.toBe("a-long-password"); // only a hash is stored
+    expect(insert.params.slice(2)).toEqual([config.newUserDailyLimit, config.newUserMaxTokens]);
+    expect(callsMatching(db, /update invites set used_by/)[0].params).toEqual([9, 5]);
+    expect(callsMatching(db, /update invites set used_at/)[0].params).toEqual([hashInviteCode("inv-abc")]);
   });
+
+  it("refuses a signup when the platform is full, before it uses up an invite", async () => {
+    const { app, db } = makeApp([[/select count\(\*\)::int as n from users/, { rows: [{ n: 3 }] }], ...inviteRoutes]);
+    const res = await request(app).post("/api/auth/signup").send(body);
+    expect(res.status).toBe(403);
+    expect(res.body.error).toMatch(/full/);
+    expect(callsMatching(db, /update invites/)).toHaveLength(0);
+    expect(callsMatching(db, /insert into users/)).toHaveLength(0);
+  });
+
+  it("starts a new account with the small starting limits, in open mode too", async () => {
+    const { app, db } = makeApp(inviteRoutes, { config: { signupMode: "open", newUserDailyLimit: 7 } });
+    const res = await request(app).post("/api/auth/signup").send({ email: "n@example.com", password: "a-long-password" });
+    expect(res.status).toBe(201);
+    expect(callsMatching(db, /insert into users/)[0].params.slice(2)).toEqual([7, config.newUserMaxTokens]);
+  });
+
+    // The duplicate assertions here were outside an it() test and are covered above.
+
+
+
+
+
+
+
+
+
+
 
   it("refuses a code that does not exist or was used, and creates no user", async () => {
     const { app, db } = makeApp([[/update invites set used_at/, { rows: [], rowCount: 0 }]]);

@@ -15,6 +15,9 @@ export const config = {
   maxPromptsPerUser: 3,
   maxVersionsPerPrompt: 50,
   maxMemberRatePerMin: 120,
+  maxUsers: 3,
+  newUserDailyLimit: 50,
+  newUserMaxTokens: 1024,
 };
 
 export const ADMIN = 1;

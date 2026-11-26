@@ -25,13 +25,19 @@ class FakeKeys:
 
 
 class FakeQuota:
-    def __init__(self, allowed=True):
+    def __init__(self, allowed=True, platform_allowed=True):
         self.allowed = allowed
+        self.platform_allowed = platform_allowed
         self.calls = []
+        self.platform_calls = []
 
     async def consume(self, user_id, limit):
         self.calls.append((user_id, limit))
         return QuotaResult(self.allowed, limit, 1 if self.allowed else 0, 3600)
+
+    async def consume_platform(self, limit):
+        self.platform_calls.append(limit)
+        return QuotaResult(self.platform_allowed, limit, 1 if self.platform_allowed else 0, 7200)
 
 
 @pytest.fixture(autouse=True)
@@ -179,3 +185,37 @@ def test_each_key_is_held_to_its_own_limit_per_minute(monkeypatch, quota):
     assert post("ap-thirty").status_code == 200
     # a request refused for the per minute limit does not use up the daily quota
     assert len(quota.calls) == 3
+
+ADMIN_KEY = ApiKeyInfo(
+    key_id="ffffffff", name="admin", rate_limit_per_min=60, user_id=9,
+    daily_request_limit=1_000_000, max_tokens_cap=100_000, is_admin=True,
+)
+
+
+def test_members_share_one_daily_limit_for_the_whole_platform(monkeypatch):
+    fake = FakeQuota(platform_allowed=False)
+    monkeypatch.setattr("app.core.rate_limit.quota_limiter", fake)
+    monkeypatch.setattr("app.core.rate_limit.PLATFORM_DAILY_LIMIT", 500)
+    response = post("ap-a")
+    assert response.status_code == 429
+    assert "shared daily limit" in response.json()["detail"]
+    assert response.headers["retry-after"] == "7200"
+    assert fake.calls == [(1, 2)] and fake.platform_calls == [500]
+
+
+def test_administrators_and_keys_without_an_owner_are_not_counted_in_the_shared_limit(monkeypatch):
+    fake = FakeQuota(platform_allowed=False)
+    monkeypatch.setattr("app.core.rate_limit.quota_limiter", fake)
+    monkeypatch.setattr("app.core.rate_limit.PLATFORM_DAILY_LIMIT", 500)
+    monkeypatch.setattr("app.core.auth.key_store", FakeKeys({"ap-admin": ADMIN_KEY, "ap-old": LEGACY}))
+    assert post("ap-admin").status_code == 200
+    assert post("ap-old").status_code == 200
+    assert fake.platform_calls == []
+
+
+def test_the_shared_limit_can_be_switched_off(monkeypatch):
+    fake = FakeQuota(platform_allowed=False)
+    monkeypatch.setattr("app.core.rate_limit.quota_limiter", fake)
+    monkeypatch.setattr("app.core.rate_limit.PLATFORM_DAILY_LIMIT", 0)
+    assert post("ap-a").status_code == 200
+    assert fake.platform_calls == []    

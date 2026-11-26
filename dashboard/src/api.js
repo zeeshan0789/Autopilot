@@ -1,5 +1,7 @@
 // The web API (Node.js). It is separate from the gateway on port 8000.
 const API_URL = import.meta.env.VITE_API_URL ?? "http://127.0.0.1:3001";
+// Where applications send their requests. Only shown in the examples: the dashboard itself never calls it.
+export const GATEWAY_URL = import.meta.env.VITE_GATEWAY_URL ?? "http://127.0.0.1:8000";
 const TOKEN_KEY = "autopilot_token";
 
 // sessionStorage: the login ends when the tab is closed
@@ -42,7 +44,11 @@ export async function api(path, { method = "GET", body, query } = {}) {
   }
 
   const data = await response.json().catch(() => ({}));
-  if (response.status === 401 && token) onUnauthorized();
-  if (!response.ok) throw new ApiError(response.status, data.error ?? `request failed (${response.status})`);
+  const message = data.error ?? `request failed (${response.status})`;
+  // An expired login, or an account that was suspended while the page was open: back to the login page
+  if (token && (response.status === 401 || (response.status === 403 && /suspended/i.test(message)))) {
+    onUnauthorized();
+  }
+  if (!response.ok) throw new ApiError(response.status, message);
   return data;
 }

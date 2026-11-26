@@ -7,7 +7,7 @@ from redis import asyncio as aioredis
 from redis.exceptions import RedisError
 
 from app.core.auth import ApiKeyInfo, require_api_key
-from app.settings import REDIS_URL
+from app.settings import PLATFORM_DAILY_LIMIT, REDIS_URL
 from app.core.quota import quota_limiter
 
 logger = logging.getLogger("autopilot.rate_limit")
@@ -92,4 +92,13 @@ async def enforce_rate_limit(
                     "Retry-After": str(quota.retry_after),
                 },
             )
+    # All members share one daily limit, so that a crowd of accounts cannot use up the free model quota
+    if api_key.user_id is not None and not api_key.is_admin and PLATFORM_DAILY_LIMIT > 0:
+        shared = await quota_limiter.consume_platform(PLATFORM_DAILY_LIMIT)
+        if not shared.allowed:
+            raise HTTPException(
+                status_code=429,
+                detail="the shared daily limit of the free platform is used up, try again tomorrow",
+                headers={"Retry-After": str(shared.retry_after)},
+            )        
     return api_key

@@ -103,3 +103,12 @@ def test_a_redis_failure_lets_the_request_through():
     quota.client.down = True
     result = run(quota.consume(1, 5))
     assert result.allowed is True and result.limit == 5
+
+def test_the_platform_counter_is_shared_by_everyone_and_restarts_each_day():
+    quota, clock = make()
+    assert run(quota.consume_platform(2)).allowed is True
+    assert run(quota.consume_platform(2)).allowed is True
+    assert run(quota.consume_platform(2)).allowed is False
+    assert run(quota.consume(1, 10)).allowed is True  # a user's own counter is another counter
+    clock["now"] = TOMORROW
+    assert run(quota.consume_platform(2)).allowed is True    

@@ -1,5 +1,6 @@
 import { NavLink, Outlet } from "react-router-dom";
 import { useAuth } from "./auth.jsx";
+import { int } from "./format.js";
 
 const link = ({ isActive }) =>
   `block rounded-lg px-3 py-2 text-sm font-medium ${
@@ -22,15 +23,30 @@ export default function Layout() {
           <NavLink to="/prompts" className={link}>
             Prompts and A/B
           </NavLink>
-          {isAdmin && (
-            <NavLink to="/keys" className={link}>
-              API keys
-            </NavLink>
-          )}
+          <NavLink to="/keys" className={link}>
+            API keys
+          </NavLink>
         </nav>
+
+        {isAdmin && (
+          <nav className="mt-6 space-y-1">
+            <div className="px-3 pb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">Admin</div>
+            <NavLink to="/admin/platform" className={link}>
+              Platform
+            </NavLink>
+            <NavLink to="/admin/users" className={link}>
+              Users
+            </NavLink>
+            <NavLink to="/admin/invites" className={link}>
+              Invites
+            </NavLink>
+          </nav>
+        )}
+
         <div className="mt-8 border-t border-slate-200 px-3 pt-4 text-xs text-slate-500">
           <div className="truncate font-medium text-slate-700">{user.email}</div>
           <div>{user.role}</div>
+          {!isAdmin && <div className="mt-1">{int(user.daily_request_limit)} requests a day</div>}
           <button onClick={logout} className="mt-2 text-indigo-600 hover:underline">
             Log out
           </button>

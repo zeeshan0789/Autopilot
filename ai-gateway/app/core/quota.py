@@ -31,8 +31,15 @@ class DailyQuota:
         self._clock = clock
 
     async def consume(self, user_id: int, limit: int) -> QuotaResult:
+        return await self._consume(f"quota:{user_id}", limit)
+
+    async def consume_platform(self, limit: int) -> QuotaResult:
+        """One counter that all members share, per UTC day."""
+        return await self._consume("quota:platform", limit)
+
+    async def _consume(self, prefix: str, limit: int) -> QuotaResult:
         now = self._clock()
-        key = f"quota:{user_id}:{time.strftime('%Y%m%d', time.gmtime(now))}"
+        key = f"{prefix}:{time.strftime('%Y%m%d', time.gmtime(now))}"
         retry_after = 86400 - int(now % 86400)
         try:
             async with self.client.pipeline(transaction=True) as pipe:

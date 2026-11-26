@@ -1,5 +1,6 @@
-import { useState } from "react";
-import { Navigate, useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link, Navigate, useNavigate } from "react-router-dom";
+import { api } from "./api.js";
 import { useAuth } from "./auth.jsx";
 import { Button, ErrorBox, inputClass } from "./components.jsx";
 
@@ -10,6 +11,13 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [signupMode, setSignupMode] = useState("closed");
+
+  useEffect(() => {
+    api("/api/auth/config")
+      .then((config) => setSignupMode(config.signup_mode))
+      .catch(() => {}); // the login page works without it
+  }, []);
 
   if (user) return <Navigate to="/" replace />;
 
@@ -46,6 +54,14 @@ export default function Login() {
         <Button type="submit" disabled={busy} className="w-full">
           {busy ? "Signing in..." : "Sign in"}
         </Button>
+        {signupMode !== "closed" && (
+          <p className="text-center text-xs text-slate-500">
+            No account yet?{" "}
+            <Link to="/signup" className="text-indigo-600 hover:underline">
+              Create one
+            </Link>
+          </p>
+        )}
       </form>
     </div>
   );

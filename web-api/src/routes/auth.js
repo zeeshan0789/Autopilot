@@ -9,7 +9,7 @@ const publicUser = (user) => ({ id: user.id, email: user.email, role: user.role 
 export function authRoutes({ db, config, loginLimiter, signupLimiter, accountFailures }) {
   const router = Router();
 
-  // The dashboard asks this to know whether to show a signup page
+  // The dashboard asks this to know whether to show a signup page and an invite code field
   router.get("/config", (req, res) => res.json({ signup_mode: config.signupMode }));
 
   router.post(
@@ -52,6 +52,13 @@ export function authRoutes({ db, config, loginLimiter, signupLimiter, accountFai
 
       const passwordHash = await hashPassword(password); // slow work stays outside the transaction
       const user = await db.transaction(async (tx) => {
+        // The number of accounts is limited (checked first, so a full platform does not use up an invite).
+        // Two signups at the very same moment can pass one account over the limit: that is accepted.
+        const total = await tx.query("select count(*)::int as n from users");
+        if (Number(total.rows[0]?.n ?? 0) >= config.maxUsers) {
+          throw new HttpError(403, "registrations are full for now, try again later");
+        }
+
         let inviteId = null;
         if (config.signupMode === "invite") {
           const claimed = await tx.query(
@@ -62,10 +69,12 @@ export function authRoutes({ db, config, loginLimiter, signupLimiter, accountFai
           inviteId = claimed.rows[0].id;
         }
 
-        // The role is never taken from the request: everyone who signs up is a member
+        // The role is never taken from the request: everyone who signs up is a member, with the
+        // starting limits of a new account
         const created = await tx.query(
-          "insert into users (email, password_hash, role) values ($1, $2, 'member') returning id, email, role, status",
-          [email, passwordHash],
+          `insert into users (email, password_hash, role, daily_request_limit, max_tokens_cap)
+           values ($1, $2, 'member', $3, $4) returning id, email, role, status`,
+          [email, passwordHash, config.newUserDailyLimit, config.newUserMaxTokens],
         );
         if (inviteId !== null) {
           await tx.query("update invites set used_by = $1 where id = $2", [created.rows[0].id, inviteId]);

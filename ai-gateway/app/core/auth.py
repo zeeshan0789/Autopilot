@@ -33,7 +33,7 @@ class ApiKeyInfo:
     user_id: int | None = None  # the owner, None for keys that have no owner
     daily_request_limit: int | None = None  # None: no daily quota
     max_tokens_cap: int | None = None  # None: no cap
-
+    is_admin: bool = False  # administrators are not counted in the platform wide daily limit
 
 class AuthUnavailable(Exception):
     """The key store could not be reached, so the key cannot be checked."""
@@ -149,6 +149,7 @@ class DbKeyStore:
             user_id=key.user_id,
             daily_request_limit=None if user is None else user.daily_request_limit,
             max_tokens_cap=None if user is None else user.max_tokens_cap,
+            is_admin=user is not None and user.role == "admin",
         )
 
 
